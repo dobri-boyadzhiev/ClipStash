@@ -150,6 +150,7 @@ final class KeychainSecretStore: DatabaseSecretStoring {
             kSecAttrService as String: descriptor.service,
             kSecAttrAccount as String: descriptor.account,
             kSecAttrSynchronizable as String: kCFBooleanFalse as Any,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
     }
 }

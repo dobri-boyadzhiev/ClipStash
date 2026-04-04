@@ -1,6 +1,4 @@
-import AppKit
 import Foundation
-import LaunchAtLogin
 import OSLog
 
 @MainActor
@@ -8,12 +6,17 @@ protocol AppDataResetting {
     func deleteAllDataAndQuit() async throws
 }
 
+protocol DatabaseResettable: Sendable {
+    var path: String { get }
+    func close() throws
+}
+
 /// Deletes local app data and exits the application so the next launch starts clean.
 @MainActor
 final class AppDataResetService: AppDataResetting {
     private let logger = Logger(subsystem: "ClipStash", category: "AppDataResetService")
     private let settings: AppSettings
-    private let database: AppDatabase
+    private let database: any DatabaseResettable
     private let passphraseProvider: any DatabasePassphraseProviding
     private let dataDirectoryURL: URL
     private let fileManager: FileManager
@@ -23,13 +26,13 @@ final class AppDataResetService: AppDataResetting {
 
     init(
         settings: AppSettings,
-        database: AppDatabase,
+        database: any DatabaseResettable,
         passphraseProvider: any DatabasePassphraseProviding,
-        dataDirectoryURL: URL = AppDatabase.appSupportDirectoryURL,
+        dataDirectoryURL: URL,
         fileManager: FileManager = .default,
         prepareForReset: @escaping () -> Void,
-        terminateApplication: @escaping () -> Void = { NSApp.terminate(nil) },
-        setLaunchAtLoginEnabled: @escaping (Bool) -> Void = { LaunchAtLogin.isEnabled = $0 }
+        terminateApplication: @escaping () -> Void,
+        setLaunchAtLoginEnabled: @escaping (Bool) -> Void
     ) {
         self.settings = settings
         self.database = database
@@ -44,17 +47,45 @@ final class AppDataResetService: AppDataResetting {
     func deleteAllDataAndQuit() async throws {
         prepareForReset()
 
+        defer {
+            terminateApplication()
+        }
+
+        var errors: [Error] = []
+
         do {
             try database.close()
-            try removeItemIfNeeded(at: dataDirectoryURL)
-            try removeExternalDatabaseArtifactsIfNeeded()
-            try passphraseProvider.deleteStoredPassphrase()
-            settings.resetToDefaults()
-            setLaunchAtLoginEnabled(false)
-            terminateApplication()
         } catch {
-            logger.error("Failed to delete app data: \(error.localizedDescription, privacy: .public)")
-            throw error
+            logger.error("Failed to close database: \(error.localizedDescription, privacy: .public)")
+            errors.append(error)
+        }
+
+        do {
+            try removeItemIfNeeded(at: dataDirectoryURL)
+        } catch {
+            logger.error("Failed to remove data directory: \(error.localizedDescription, privacy: .public)")
+            errors.append(error)
+        }
+
+        do {
+            try removeExternalDatabaseArtifactsIfNeeded()
+        } catch {
+            logger.error("Failed to remove external DB artifacts: \(error.localizedDescription, privacy: .public)")
+            errors.append(error)
+        }
+
+        do {
+            try passphraseProvider.deleteStoredPassphrase()
+        } catch {
+            logger.error("Failed to delete stored passphrase: \(error.localizedDescription, privacy: .public)")
+            errors.append(error)
+        }
+
+        settings.resetToDefaults()
+        setLaunchAtLoginEnabled(false)
+
+        if let firstError = errors.first {
+            throw firstError
         }
     }
 

@@ -19,84 +19,85 @@ final class EntryManager: ObservableObject {
     }
     
     // MARK: - Process new clipboard content
-    
+
+    private func processAndSave(
+        duplicateCheck: () async throws -> ClipboardEntry?,
+        entryCreation: () -> ClipboardEntry,
+        onNewEntry: (() async -> Void)? = nil,
+        onFailure: ((Error) async -> Void)? = nil,
+        errorMessage: String
+    ) async {
+        do {
+            if let existing = try await duplicateCheck() {
+                try await handleDuplicate(existing)
+                return
+            }
+
+            await onNewEntry?()
+            var entry = entryCreation()
+            try await saveAndPrune(&entry)
+        } catch {
+            logger.error("\(errorMessage, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            await onFailure?(error)
+        }
+    }
+
     func processNewText(_ text: String, source: String?, sourceName: String?) async {
-        do {
-            var content = text
-            if settings.stripWhitespace {
-                content = content.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            guard !content.isEmpty else { return }
-            
-            if let existing = try await repository.findDuplicateText(textContent: content) {
-                try await handleDuplicate(existing)
-                return
-            }
-            
-            var entry = ClipboardEntry.text(content, source: source, sourceName: sourceName)
-            try await saveAndPrune(&entry)
-        } catch {
-            logger.error("Failed to process text clipboard entry: \(error.localizedDescription, privacy: .public)")
+        var content = text
+        if settings.stripWhitespace {
+            content = content.trimmingCharacters(in: .whitespacesAndNewlines)
         }
+        guard !content.isEmpty else { return }
+
+        await processAndSave(
+            duplicateCheck: { try await self.repository.findDuplicateText(textContent: content) },
+            entryCreation: { ClipboardEntry.text(content, source: source, sourceName: sourceName) },
+            errorMessage: "Failed to process text clipboard entry"
+        )
     }
-    
+
     func processNewRTF(plainText: String, rtfData: Data, source: String?, sourceName: String?) async {
-        do {
-            let content = settings.stripWhitespace ? plainText.trimmingCharacters(in: .whitespacesAndNewlines) : plainText
-            guard !content.isEmpty else { return }
-            
-            if let existing = try await repository.findDuplicateRTF(textContent: content, rtfData: rtfData) {
-                try await handleDuplicate(existing)
-                return
-            }
-            
-            var entry = ClipboardEntry.rtf(content, data: rtfData, source: source, sourceName: sourceName)
-            try await saveAndPrune(&entry)
-        } catch {
-            logger.error("Failed to process RTF clipboard entry: \(error.localizedDescription, privacy: .public)")
-        }
+        let content = settings.stripWhitespace ? plainText.trimmingCharacters(in: .whitespacesAndNewlines) : plainText
+        guard !content.isEmpty else { return }
+
+        await processAndSave(
+            duplicateCheck: { try await self.repository.findDuplicateRTF(textContent: content, rtfData: rtfData) },
+            entryCreation: { ClipboardEntry.rtf(content, data: rtfData, source: source, sourceName: sourceName) },
+            errorMessage: "Failed to process RTF clipboard entry"
+        )
     }
-    
+
     func processNewImage(_ data: Data, source: String?, sourceName: String?) async {
         let hash = data.sha256HexString
 
-        do {
-            if let existing = try await repository.findDuplicate(imageHash: hash) {
-                try await handleDuplicate(existing)
-                return
-            }
-            
-            imageCache?.save(data: data, forHash: hash)
-            
-            var entry = ClipboardEntry.image(hash: hash, sizeBytes: data.count, source: source, sourceName: sourceName)
-            try await saveAndPrune(&entry)
-        } catch {
-            logger.error("Failed to process image clipboard entry: \(error.localizedDescription, privacy: .public)")
-            imageCache?.delete(forHash: hash)
-            await reconcileStoredAssets()
-        }
+        await processAndSave(
+            duplicateCheck: { try await self.repository.findDuplicate(imageHash: hash) },
+            entryCreation: { ClipboardEntry.image(hash: hash, sizeBytes: data.count, source: source, sourceName: sourceName) },
+            onNewEntry: { await self.imageCache?.save(data: data, forHash: hash) },
+            onFailure: { _ in
+                await self.imageCache?.delete(forHash: hash)
+                await self.reconcileStoredAssets()
+            },
+            errorMessage: "Failed to process image clipboard entry"
+        )
     }
-    
+
     func processNewFileURLs(_ paths: String, source: String?, sourceName: String?) async {
-        do {
-            guard !paths.isEmpty else { return }
-            
-            if let existing = try await repository.findDuplicateFileURLs(textContent: paths) {
-                try await handleDuplicate(existing)
-                return
-            }
-            
-            var entry = ClipboardEntry(
-                id: nil, type: .fileURL, textContent: paths, rtfData: nil, imageHash: nil,
-                sourceAppBundleId: source, sourceAppName: sourceName,
-                isFavorite: false, isPinned: false,
-                createdAt: Date(), lastUsedAt: Date(),
-                useCount: 1, contentSizeBytes: paths.utf8.count
-            )
-            try await saveAndPrune(&entry)
-        } catch {
-            logger.error("Failed to process file URL clipboard entry: \(error.localizedDescription, privacy: .public)")
-        }
+        guard !paths.isEmpty else { return }
+
+        await processAndSave(
+            duplicateCheck: { try await self.repository.findDuplicateFileURLs(textContent: paths) },
+            entryCreation: {
+                ClipboardEntry(
+                    id: nil, type: .fileURL, textContent: paths, rtfData: nil, imageHash: nil,
+                    sourceAppBundleId: source, sourceAppName: sourceName,
+                    isFavorite: false, isPinned: false,
+                    createdAt: Date(), lastUsedAt: Date(),
+                    useCount: 1, contentSizeBytes: paths.utf8.count
+                )
+            },
+            errorMessage: "Failed to process file URL clipboard entry"
+        )
     }
     
     // MARK: - Actions
@@ -141,7 +142,7 @@ final class EntryManager: ObservableObject {
         guard let imageCache else { return }
         do {
             let validHashes = try await repository.fetchImageHashes()
-            imageCache.cleanOrphans(validHashes: validHashes)
+            await imageCache.cleanOrphans(validHashes: validHashes)
         } catch {
             logger.error("Failed to reconcile image cache: \(error.localizedDescription, privacy: .public)")
         }
@@ -194,8 +195,8 @@ extension Data {
 
 // MARK: - ImageCache Protocol
 protocol ImageCacheProtocol: Sendable {
-    func save(data: Data, forHash hash: String)
-    func load(forHash hash: String) -> Data?
-    func delete(forHash hash: String)
-    func cleanOrphans(validHashes: Set<String>)
+    func save(data: Data, forHash hash: String) async
+    func load(forHash hash: String) async -> Data?
+    func delete(forHash hash: String) async
+    func cleanOrphans(validHashes: Set<String>) async
 }

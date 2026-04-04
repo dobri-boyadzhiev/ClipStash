@@ -4,8 +4,9 @@ import Combine
 
 /// Lightweight global hotkey service using Carbon APIs.
 /// Replaces the KeyboardShortcuts library to avoid #Preview macro build issues.
+@MainActor
 final class GlobalHotKeyService {
-    nonisolated(unsafe) static let shared = GlobalHotKeyService()
+    static let shared = GlobalHotKeyService()
     
     private var hotKeys: [UInt32: HotKeyRegistration] = [:]
     private var nextId: UInt32 = 1

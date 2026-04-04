@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
 
+import LaunchAtLogin
+
 /// AppDelegate handles app lifecycle events and serves as the DI container.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -34,7 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         database = databaseBootstrap.database
         repository = SQLiteEntryRepository(database: database)
-        imageCache = ImageFileCache()
+        imageCache = ImageFileCache(passphraseProvider: databasePassphraseProvider)
         entryManager = EntryManager(repository: repository, settings: settings, imageCache: imageCache)
         clipboardMonitor = ClipboardMonitor(entryManager: entryManager, settings: settings)
         clipboardWriter = PasteboardClipboardWriter(imageCache: imageCache)
@@ -50,10 +52,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settings: settings,
             database: database,
             passphraseProvider: databasePassphraseProvider,
+            dataDirectoryURL: AppDatabase.appSupportDirectoryURL,
             prepareForReset: { [weak self] in
                 self?.clipboardMonitor.stop()
                 self?.hotKeyService.unregisterAll()
-            }
+            },
+            terminateApplication: { NSApp.terminate(nil) },
+            setLaunchAtLoginEnabled: { LaunchAtLogin.isEnabled = $0 }
         )
         settingsViewModel = SettingsViewModel(
             settings: settings,

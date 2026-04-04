@@ -1,5 +1,5 @@
 import Foundation
-import SwiftUI
+import Combine
 
 // MARK: - App Settings
 final class AppSettings: ObservableObject {
@@ -12,19 +12,40 @@ final class AppSettings: ObservableObject {
     ]
     
     // History
-    @AppStorage("maxItems") var maxItems: Int = 10_000
-    @AppStorage("maxCacheSizeMB") var maxCacheSizeMB: Int = 10_240
-    
+    var maxItems: Int {
+        get { UserDefaults.standard.object(forKey: "maxItems") as? Int ?? 10_000 }
+        set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "maxItems") }
+    }
+    var maxCacheSizeMB: Int {
+        get { UserDefaults.standard.object(forKey: "maxCacheSizeMB") as? Int ?? 10_240 }
+        set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "maxCacheSizeMB") }
+    }
+
     // Behavior
-    @AppStorage("stripWhitespace") var stripWhitespace: Bool = false
-    @AppStorage("confirmBeforeClear") var confirmBeforeClear: Bool = true
-    @AppStorage("launchAtLogin") var launchAtLogin: Bool = false
-    
+    var stripWhitespace: Bool {
+        get { UserDefaults.standard.object(forKey: "stripWhitespace") as? Bool ?? false }
+        set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "stripWhitespace") }
+    }
+    var confirmBeforeClear: Bool {
+        get { UserDefaults.standard.object(forKey: "confirmBeforeClear") as? Bool ?? true }
+        set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "confirmBeforeClear") }
+    }
+    var launchAtLogin: Bool {
+        get { UserDefaults.standard.object(forKey: "launchAtLogin") as? Bool ?? false }
+        set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "launchAtLogin") }
+    }
+
     // Display
-    @AppStorage("windowWidthPercentage") var windowWidthPercentage: Int = 33
-    
+    var windowWidthPercentage: Int {
+        get { UserDefaults.standard.object(forKey: "windowWidthPercentage") as? Int ?? 33 }
+        set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "windowWidthPercentage") }
+    }
+
     // Privacy
-    @AppStorage("isPrivateMode") var isPrivateMode: Bool = false
+    var isPrivateMode: Bool {
+        get { UserDefaults.standard.object(forKey: "isPrivateMode") as? Bool ?? false }
+        set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "isPrivateMode") }
+    }
     
     @MainActor
     func setPrivateMode(_ isEnabled: Bool) {

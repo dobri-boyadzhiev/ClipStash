@@ -11,7 +11,7 @@ final class PasteboardClipboardWriter: ClipboardWriting, @unchecked Sendable {
         self.imageCache = imageCache
     }
 
-    func write(_ entry: ClipboardEntry) throws {
+    func write(_ entry: ClipboardEntry) async throws {
         switch entry.type {
         case .text:
             guard let text = entry.textContent else {
@@ -29,7 +29,7 @@ final class PasteboardClipboardWriter: ClipboardWriting, @unchecked Sendable {
             guard let hash = entry.imageHash else {
                 throw ClipboardWriteError.missingImageHash
             }
-            guard let data = imageCache.load(forHash: hash) else {
+            guard let data = await imageCache.load(forHash: hash) else {
                 throw ClipboardWriteError.missingImageData(hash: hash)
             }
             try writeImage(data)
@@ -51,7 +51,7 @@ final class PasteboardClipboardWriter: ClipboardWriting, @unchecked Sendable {
         }
     }
 
-    func writePlainText(_ entry: ClipboardEntry) throws {
+    func writePlainText(_ entry: ClipboardEntry) async throws {
         guard let text = entry.textContent else {
             throw ClipboardWriteError.plainTextRepresentationUnavailable(entry.type)
         }

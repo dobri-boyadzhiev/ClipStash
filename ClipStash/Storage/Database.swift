@@ -8,7 +8,7 @@ final class AppDatabase: Sendable {
     let path: String
     let protectionMode: DatabaseProtectionMode
     let dbPool: DatabasePool
-    
+
     private init(
         path: String,
         protectionMode: DatabaseProtectionMode,
@@ -25,7 +25,7 @@ final class AppDatabase: Sendable {
             // Slightly faster, still safe with WAL
             try db.execute(sql: "PRAGMA synchronous=NORMAL")
         }
-        
+
         dbPool = try DatabasePool(path: path, configuration: config)
         try migrator.migrate(dbPool)
         try Self.applyRestrictedFilePermissionsIfNeeded(to: URL(fileURLWithPath: path))
@@ -44,7 +44,7 @@ final class AppDatabase: Sendable {
     func close() throws {
         try dbPool.close()
     }
-    
+
     /// Temporary database for testing (uses temp file for WAL support)
     static func inMemory() throws -> AppDatabase {
         let tempDir = FileManager.default.temporaryDirectory
@@ -52,14 +52,14 @@ final class AppDatabase: Sendable {
         let passphraseProvider = try EphemeralDatabasePassphraseProvider()
         return try AppDatabase(path: tempFile, passphraseProvider: passphraseProvider)
     }
-    
+
     private var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
-        
+
         #if DEBUG
         migrator.eraseDatabaseOnSchemaChange = true
         #endif
-        
+
         migrator.registerMigration("v1_createClipboardEntry") { db in
             try db.create(table: "clipboardEntry") { t in
                 t.autoIncrementedPrimaryKey("id")
@@ -75,7 +75,7 @@ final class AppDatabase: Sendable {
                 t.column("useCount", .integer).notNull().defaults(to: 1)
                 t.column("contentSizeBytes", .integer).notNull().defaults(to: 0)
             }
-            
+
             // Indices for common queries
             try db.create(index: "idx_clipboardEntry_lastUsedAt",
                           on: "clipboardEntry", columns: ["lastUsedAt"])
@@ -87,7 +87,7 @@ final class AppDatabase: Sendable {
             try db.create(index: "idx_clipboardEntry_createdAt",
                           on: "clipboardEntry", columns: ["createdAt"])
         }
-        
+
         migrator.registerMigration("v1_createFTS") { db in
             // Full-text search index on textContent
             try db.create(virtualTable: "clipboardEntryFts", using: FTS5()) { t in
@@ -102,10 +102,15 @@ final class AppDatabase: Sendable {
                 t.add(column: "rtfData", .blob)
             }
         }
-        
+
+        migrator.registerMigration("v3_addDedupIndex") { db in
+            try db.create(index: "idx_clipboardEntry_type_textContent",
+                          on: "clipboardEntry", columns: ["type", "textContent"])
+        }
+
         return migrator
     }
-    
+
     /// Database file path in Application Support
     static var defaultPath: String {
         defaultURL.path
@@ -137,3 +142,5 @@ final class AppDatabase: Sendable {
         try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 }
+
+extension AppDatabase: DatabaseResettable {}

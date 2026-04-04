@@ -217,45 +217,54 @@ final class SQLiteEntryRepository: EntryRepository, @unchecked Sendable {
     func prune(maxItems: Int, maxBytes: Int) async throws -> Int {
         try await db.dbPool.write { db in
             var deleted = 0
-            
+
             let totalCount = try ClipboardEntry
                 .filter(Column("isFavorite") == false)
                 .fetchCount(db)
-            
+
             if totalCount > maxItems {
                 let toDelete = totalCount - maxItems
-                let oldEntries = try ClipboardEntry
-                    .filter(Column("isFavorite") == false)
-                    .order(Column("lastUsedAt").asc)
-                    .limit(toDelete)
-                    .fetchAll(db)
-                
-                for entry in oldEntries {
-                    try entry.delete(db)
-                    deleted += 1
+                let idsToDelete = try Int64.fetchAll(db, sql: """
+                    SELECT id FROM clipboardEntry
+                    WHERE isFavorite = 0
+                    ORDER BY lastUsedAt ASC
+                    LIMIT ?
+                    """, arguments: [toDelete])
+
+                for id in idsToDelete {
+                    try db.execute(sql: "DELETE FROM clipboardEntry WHERE id = ?", arguments: [id])
                 }
+                deleted += idsToDelete.count
             }
-            
+
             let totalBytes = try Int.fetchOne(db, sql: """
                 SELECT COALESCE(SUM(contentSizeBytes), 0)
                 FROM clipboardEntry WHERE isFavorite = 0
                 """) ?? 0
-            
+
             if totalBytes > maxBytes {
-                let entries = try ClipboardEntry
-                    .filter(Column("isFavorite") == false)
-                    .order(Column("lastUsedAt").asc)
-                    .fetchAll(db)
-                
                 var currentBytes = totalBytes
-                for entry in entries {
+                let cursor = try Row.fetchCursor(db, sql: """
+                    SELECT id, contentSizeBytes FROM clipboardEntry
+                    WHERE isFavorite = 0
+                    ORDER BY lastUsedAt ASC
+                    """)
+
+                var idsToDelete: [Int64] = []
+                while let row = try cursor.next() {
                     guard currentBytes > maxBytes else { break }
-                    currentBytes -= entry.contentSizeBytes
-                    try entry.delete(db)
-                    deleted += 1
+                    let id: Int64 = row["id"]
+                    let size: Int = row["contentSizeBytes"]
+                    currentBytes -= size
+                    idsToDelete.append(id)
                 }
+
+                for id in idsToDelete {
+                    try db.execute(sql: "DELETE FROM clipboardEntry WHERE id = ?", arguments: [id])
+                }
+                deleted += idsToDelete.count
             }
-            
+
             return deleted
         }
     }

@@ -155,7 +155,7 @@ final class HistoryViewModel: ObservableObject {
     func select(_ entry: ClipboardEntry) async -> Bool {
         do {
             clipboardMonitor.beginDebounce()
-            try clipboardWriter.write(entry)
+            try await clipboardWriter.write(entry)
             let _ = try await entryManager.select(entry)
             errorMessage = nil
             return true
@@ -169,7 +169,7 @@ final class HistoryViewModel: ObservableObject {
     func copyAsPlainText(_ entry: ClipboardEntry) async -> Bool {
         do {
             clipboardMonitor.beginDebounce()
-            try clipboardWriter.writePlainText(entry)
+            try await clipboardWriter.writePlainText(entry)
             let _ = try await entryManager.select(entry)
             errorMessage = nil
             return true

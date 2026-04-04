@@ -175,7 +175,7 @@ struct ClipboardCachedImageView: View {
         }
 
         let thumbnailTask = Task.detached(priority: .utility) { () -> NSImage? in
-            guard let data = imageCache.load(forHash: hash) else { return nil }
+            guard let data = await imageCache.load(forHash: hash) else { return nil }
             return ClipboardThumbnailRenderer.makeThumbnail(from: data, maxPixelSize: thumbnailMaxPixelSize)
         }
         let loadedThumbnail = await thumbnailTask.value
