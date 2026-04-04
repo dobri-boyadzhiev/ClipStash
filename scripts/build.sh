@@ -2,7 +2,10 @@
 set -euo pipefail
 
 APP_NAME="ClipStash"
-VERSION="${1:-1.0.0}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+RELEASES_DIR="${PROJECT_ROOT}/releases"
+VERSION="${1:-2.0.0}"
 CONFIG="${2:-debug}"
 SCRATCH_PATH="/tmp/clipstash-build"
 CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-}"
@@ -86,5 +89,10 @@ if [ -d "${APP_BUNDLE}/Contents/Frameworks/SQLCipher.framework" ]; then
 fi
 echo "═══════════════════════════════════════"
 echo ""
+echo "📂 Copying DMG to releases/..."
+mkdir -p "${RELEASES_DIR}"
+cp "/tmp/${DMG_NAME}" "${RELEASES_DIR}/${DMG_NAME}"
+echo ""
 echo "📋 Install: open /tmp/${DMG_NAME}"
 echo "   → Drag ${APP_NAME} to Applications"
+echo "   Local: ${RELEASES_DIR}/${DMG_NAME}"
