@@ -63,8 +63,12 @@ if [ -n "${CODESIGN_IDENTITY}" ]; then
     echo "🔏 Code signing app bundle..."
     codesign --force --deep --timestamp --options runtime --sign "${CODESIGN_IDENTITY}" "${APP_BUNDLE}"
 else
-    echo "⚠️  Building unsigned app bundle (local-use build only)."
+    echo "🔏 Applying ad-hoc signature for local-use app bundle..."
+    codesign --force --deep --sign - "${APP_BUNDLE}"
 fi
+
+echo "🔎 Verifying app signature..."
+codesign --verify --deep --strict --verbose=2 "${APP_BUNDLE}"
 
 echo "💿 Creating DMG..."
 DMG_DIR="/tmp/clipstash_dmg"
