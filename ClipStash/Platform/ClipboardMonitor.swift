@@ -84,6 +84,9 @@ final class ClipboardMonitor: ObservableObject {
         // (RTF also contains plain text, but we prefer the rich version)
         
         if let rtfData = pasteboard.data(forType: .rtf) {
+            // Note: NSAttributedString RTF parsing runs on main thread.
+            // This is acceptable for typical clipboard RTF sizes (< 100KB).
+            // For very large RTF documents this could cause brief UI stutter.
             let plainText = pasteboard.string(forType: .string)
                 ?? (try? NSAttributedString(
                     data: rtfData,

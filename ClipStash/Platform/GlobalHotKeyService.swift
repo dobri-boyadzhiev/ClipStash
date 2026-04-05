@@ -36,7 +36,7 @@ final class GlobalHotKeyService {
             
             guard status == noErr else { return status }
             
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 GlobalHotKeyService.shared.hotKeys[hotKeyID.id]?.handler()
             }
             

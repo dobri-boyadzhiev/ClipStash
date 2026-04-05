@@ -73,21 +73,25 @@ struct PopoverView: View {
                 return
             }
 
-            if !newEntries.contains(where: { $0.id == selectedEntryId }) &&
-                !viewModel.favorites.contains(where: { $0.id == selectedEntryId }) {
+            let entryIds = Set(newEntries.compactMap(\.id))
+            let favoriteIds = Set(viewModel.favorites.compactMap(\.id))
+
+            if !entryIds.contains(selectedEntryId) && !favoriteIds.contains(selectedEntryId) {
                 self.selectedEntryId = newEntries.first?.id ?? viewModel.favorites.first?.id
             }
 
             if let hoveredImageEntry,
-               !newEntries.contains(where: { $0.id == hoveredImageEntry.id }) &&
-                !viewModel.favorites.contains(where: { $0.id == hoveredImageEntry.id }) {
+               let hoveredId = hoveredImageEntry.id,
+               !entryIds.contains(hoveredId) && !favoriteIds.contains(hoveredId) {
                 self.hoveredImageEntry = nil
             }
         }
         .onChange(of: viewModel.favorites) { _, newFavorites in
             guard let hoveredImageEntry else { return }
-            if !viewModel.entries.contains(where: { $0.id == hoveredImageEntry.id }) &&
-                !newFavorites.contains(where: { $0.id == hoveredImageEntry.id }) {
+            let entryIds = Set(viewModel.entries.compactMap(\.id))
+            let favoriteIds = Set(newFavorites.compactMap(\.id))
+            if let hoveredId = hoveredImageEntry.id,
+               !entryIds.contains(hoveredId) && !favoriteIds.contains(hoveredId) {
                 self.hoveredImageEntry = nil
             }
         }
@@ -170,6 +174,7 @@ struct PopoverView: View {
                     imageCache: imageCache,
                     selectedId: $selectedEntryId,
                     hasMore: viewModel.hasMore,
+                    isLoading: viewModel.isLoading,
                     onSelect: { entry in
                         selectedEntryId = entry.id
                         Task { await handleSelection(entry) }

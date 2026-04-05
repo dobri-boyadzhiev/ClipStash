@@ -23,6 +23,7 @@ final class SettingsViewModel: ObservableObject {
     private let database: AppDatabase
     private let databasePassphraseProvider: DatabasePassphraseProviding
 
+    @Published var statsError: String? = nil
     @Published var isProcessingBackup = false
     @Published var backupErrorMessage: String? = nil
 
@@ -43,9 +44,16 @@ final class SettingsViewModel: ObservableObject {
     }
 
     func loadStats() async {
-        totalItems = (try? await repository.totalCount()) ?? 0
-        let bytes = (try? await repository.totalBytes()) ?? 0
-        totalSizeMB = Double(bytes) / 1_048_576.0
+        do {
+            totalItems = try await repository.totalCount()
+            let bytes = try await repository.totalBytes()
+            totalSizeMB = Double(bytes) / 1_048_576.0
+            statsError = nil
+        } catch {
+            totalItems = 0
+            totalSizeMB = 0
+            statsError = "Failed to load statistics: \(error.localizedDescription)"
+        }
     }
 
     func loadAIModels() {

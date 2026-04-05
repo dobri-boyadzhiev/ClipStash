@@ -6,6 +6,7 @@ struct HistoryListView: View {
     let imageCache: ImageCacheProtocol?
     @Binding var selectedId: Int64?
     let hasMore: Bool
+    let isLoading: Bool
     let onSelect: (ClipboardEntry) -> Void
     let onCopyPlainText: (ClipboardEntry) -> Void
     let onImproveText: (ClipboardEntry) -> Void
@@ -27,8 +28,7 @@ struct HistoryListView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .frame(minHeight: 200)
         } else {
-            ScrollViewReader { scrollProxy in
-                ScrollView {
+            ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(entries) { entry in
                             EntryRowView(
@@ -53,12 +53,13 @@ struct HistoryListView: View {
                                 .controlSize(.small)
                                 .frame(maxWidth: .infinity)
                                 .padding(8)
-                                .onAppear { onLoadMore() }
+                                .onAppear {
+                                    guard !isLoading else { return }
+                                    onLoadMore()
+                                }
                         }
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
     }

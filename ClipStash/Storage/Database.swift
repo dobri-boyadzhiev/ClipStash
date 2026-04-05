@@ -56,10 +56,6 @@ final class AppDatabase: Sendable {
     private var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
 
-        #if DEBUG
-        migrator.eraseDatabaseOnSchemaChange = true
-        #endif
-
         migrator.registerMigration("v1_createClipboardEntry") { db in
             try db.create(table: "clipboardEntry") { t in
                 t.autoIncrementedPrimaryKey("id")
@@ -106,6 +102,42 @@ final class AppDatabase: Sendable {
         migrator.registerMigration("v3_addDedupIndex") { db in
             try db.create(index: "idx_clipboardEntry_type_textContent",
                           on: "clipboardEntry", columns: ["type", "textContent"])
+        }
+
+        migrator.registerMigration("v4_addContentHash") { db in
+            try db.alter(table: "clipboardEntry") { t in
+                t.add(column: "contentHash", .text)
+            }
+            try db.create(index: "idx_clipboardEntry_contentHash",
+                          on: "clipboardEntry", columns: ["contentHash"])
+
+            // Backfill contentHash for existing text/rtf/fileURL entries
+            let cursor = try Row.fetchCursor(db, sql: """
+                SELECT id, type, textContent, rtfData, imageHash
+                FROM clipboardEntry WHERE contentHash IS NULL
+                """)
+            while let row = try cursor.next() {
+                let id: Int64 = row["id"]
+                let type: String = row["type"]
+                let hashValue: String?
+
+                if type == "image" {
+                    hashValue = row["imageHash"] as String?
+                } else if type == "rtf", let rtfData = row["rtfData"] as? Data {
+                    hashValue = rtfData.sha256HexString
+                } else if let text = row["textContent"] as? String, let data = text.data(using: .utf8) {
+                    hashValue = data.sha256HexString
+                } else {
+                    hashValue = nil
+                }
+
+                if let hashValue {
+                    try db.execute(
+                        sql: "UPDATE clipboardEntry SET contentHash = ? WHERE id = ?",
+                        arguments: [hashValue, id]
+                    )
+                }
+            }
         }
 
         return migrator

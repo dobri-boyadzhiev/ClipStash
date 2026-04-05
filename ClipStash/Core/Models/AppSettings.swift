@@ -2,8 +2,9 @@ import Foundation
 import Combine
 
 // MARK: - App Settings
+@MainActor
 final class AppSettings: ObservableObject {
-    nonisolated(unsafe) static let shared = AppSettings()
+    static let shared = AppSettings()
     private static let legacyStorageKeys = [
         "excludedApps",
         "ignorePasswordManagers",

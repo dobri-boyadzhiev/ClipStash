@@ -37,6 +37,7 @@ final class ImageFileCache: ImageCacheProtocol, Sendable {
     func save(data: Data, forHash hash: String) async {
         let url = cacheDir.appendingPathComponent(hash)
         let provider = self.passphraseProvider
+        let log = self.logger
         await Task.detached {
             do {
                 let passphrase = try provider.passphrase()
@@ -47,7 +48,7 @@ final class ImageFileCache: ImageCacheProtocol, Sendable {
                 try encryptedData.write(to: url, options: .atomic)
                 try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
             } catch {
-                Logger(subsystem: "ClipStash", category: "ImageFileCache").error("Failed to store image cache file \(hash, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                log.error("Failed to store image cache file \(hash, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }.value
     }
@@ -55,6 +56,7 @@ final class ImageFileCache: ImageCacheProtocol, Sendable {
     func load(forHash hash: String) async -> Data? {
         let url = cacheDir.appendingPathComponent(hash)
         let provider = self.passphraseProvider
+        let log = self.logger
         return await Task.detached {
             do {
                 let encryptedData = try Data(contentsOf: url)
@@ -64,7 +66,7 @@ final class ImageFileCache: ImageCacheProtocol, Sendable {
                 let sealedBox = try AES.GCM.SealedBox(combined: encryptedData)
                 return try AES.GCM.open(sealedBox, using: key)
             } catch {
-                Logger(subsystem: "ClipStash", category: "ImageFileCache").error("Failed to load image cache file \(hash, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                log.error("Failed to load image cache file \(hash, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 return nil
             }
         }.value
@@ -72,13 +74,14 @@ final class ImageFileCache: ImageCacheProtocol, Sendable {
 
     func delete(forHash hash: String) async {
         let url = cacheDir.appendingPathComponent(hash)
+        let log = self.logger
         await Task.detached {
             do {
                 if FileManager.default.fileExists(atPath: url.path) {
                     try FileManager.default.removeItem(at: url)
                 }
             } catch {
-                Logger(subsystem: "ClipStash", category: "ImageFileCache").error("Failed to delete image cache file \(hash, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                log.error("Failed to delete image cache file \(hash, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }.value
     }
@@ -86,6 +89,7 @@ final class ImageFileCache: ImageCacheProtocol, Sendable {
     /// Remove orphaned image files not referenced in the database
     func cleanOrphans(validHashes: Set<String>) async {
         let dir = cacheDir
+        let log = self.logger
         await Task.detached {
             do {
                 let files = try FileManager.default.contentsOfDirectory(atPath: dir.path)
@@ -93,7 +97,7 @@ final class ImageFileCache: ImageCacheProtocol, Sendable {
                     try FileManager.default.removeItem(at: dir.appendingPathComponent(file))
                 }
             } catch {
-                Logger(subsystem: "ClipStash", category: "ImageFileCache").error("Failed to clean orphaned image cache files: \(error.localizedDescription, privacy: .public)")
+                log.error("Failed to clean orphaned image cache files: \(error.localizedDescription, privacy: .public)")
             }
         }.value
     }

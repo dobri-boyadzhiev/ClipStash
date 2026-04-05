@@ -42,6 +42,7 @@ final class OllamaService {
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.timeoutInterval = 10
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -88,7 +89,8 @@ final class OllamaService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(requestBody)
-        
+        request.timeoutInterval = 60
+
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {

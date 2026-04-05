@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import GRDB
 
@@ -9,6 +10,7 @@ struct ClipboardEntry: Identifiable, Codable, Hashable, Sendable {
     var textContent: String?
     var rtfData: Data?
     var imageHash: String?
+    var contentHash: String?
     var sourceAppBundleId: String?
     var sourceAppName: String?
     var isFavorite: Bool
@@ -18,12 +20,18 @@ struct ClipboardEntry: Identifiable, Codable, Hashable, Sendable {
     var useCount: Int
     var contentSizeBytes: Int
     
+    // Swift Regex — immutable value, safe for concurrent reads despite Sendable limitation
+    private nonisolated(unsafe) static let whitespaceRegex = /\s+/
+
     /// Display preview — first N characters for text, type name for others
     var preview: String {
         switch type {
         case .text, .rtf:
             guard let text = textContent else { return "" }
-            let cleaned = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+            // Only process first 500 chars to avoid O(n) regex on large text (#6 fix included)
+            let slice = text.count > 500 ? String(text.prefix(500)) : text
+            let cleaned = slice.replacing(Self.whitespaceRegex, with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
             if cleaned.count > 200 {
                 return String(cleaned.prefix(199)) + "…"
             }
@@ -56,6 +64,7 @@ extension ClipboardEntry {
             textContent: content,
             rtfData: nil,
             imageHash: nil,
+            contentHash: computeHash(content.data(using: .utf8)),
             sourceAppBundleId: source,
             sourceAppName: sourceName,
             isFavorite: false,
@@ -66,7 +75,7 @@ extension ClipboardEntry {
             contentSizeBytes: content.utf8.count
         )
     }
-    
+
     static func image(hash: String, sizeBytes: Int, source: String? = nil, sourceName: String? = nil) -> ClipboardEntry {
         ClipboardEntry(
             id: nil,
@@ -74,6 +83,7 @@ extension ClipboardEntry {
             textContent: nil,
             rtfData: nil,
             imageHash: hash,
+            contentHash: hash, // image hash is already a content hash
             sourceAppBundleId: source,
             sourceAppName: sourceName,
             isFavorite: false,
@@ -92,6 +102,7 @@ extension ClipboardEntry {
             textContent: plainText,
             rtfData: data,
             imageHash: nil,
+            contentHash: computeHash(data),
             sourceAppBundleId: source,
             sourceAppName: sourceName,
             isFavorite: false,
@@ -101,5 +112,11 @@ extension ClipboardEntry {
             useCount: 1,
             contentSizeBytes: data.count
         )
+    }
+
+    private static func computeHash(_ data: Data?) -> String? {
+        guard let data else { return nil }
+        let digest = SHA256.hash(data: data)
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 }

@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 import SwiftUI
 
 import LaunchAtLogin
@@ -75,15 +76,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsViewModel: settingsViewModel
         )
 
-        NotificationCenter.default.addObserver(forName: NSNotification.Name("CloseDatabaseForRestore"), object: nil, queue: nil) { [weak self] _ in
-            Task { @MainActor [weak self] in
+        BackupService.shared.onCloseDatabaseForRestore = { [weak self] in
+            await MainActor.run {
                 self?.clipboardMonitor.stop()
                 self?.hotKeyService.unregisterAll()
                 try? self?.database.dbPool.close()
             }
         }
 
-        NotificationCenter.default.addObserver(forName: NSNotification.Name("RestoreCompleted"), object: nil, queue: nil) { _ in
+        NotificationCenter.default.addObserver(forName: .backupRestoreCompleted, object: nil, queue: nil) { _ in
             DispatchQueue.main.async {
                 let alert = NSAlert()
                 alert.messageText = "Restore Successful"
@@ -232,7 +233,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Simulate Cmd+V to paste
             await simulateKeystroke(keyCode: 9, modifiers: .maskCommand) // 9 is V
         } catch {
-            print("Magic Replace failed: \(error)")
+            Logger(subsystem: "ClipStash", category: "MagicReplace").error("Magic Replace failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 

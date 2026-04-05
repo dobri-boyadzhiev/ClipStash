@@ -274,12 +274,18 @@ struct SettingsContentView: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                     Divider()
-                    Text("Items: \(viewModel.totalItems)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("Size: \(String(format: "%.1f", viewModel.totalSizeMB)) MB")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    if let statsError = viewModel.statsError {
+                        Text(statsError)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    } else {
+                        Text("Items: \(viewModel.totalItems)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("Size: \(String(format: "%.1f", viewModel.totalSizeMB)) MB")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

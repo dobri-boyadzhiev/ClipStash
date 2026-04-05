@@ -90,6 +90,7 @@ final class EntryManager: ObservableObject {
             entryCreation: {
                 ClipboardEntry(
                     id: nil, type: .fileURL, textContent: paths, rtfData: nil, imageHash: nil,
+                    contentHash: paths.data(using: .utf8)?.sha256HexString,
                     sourceAppBundleId: source, sourceAppName: sourceName,
                     isFavorite: false, isPinned: false,
                     createdAt: Date(), lastUsedAt: Date(),

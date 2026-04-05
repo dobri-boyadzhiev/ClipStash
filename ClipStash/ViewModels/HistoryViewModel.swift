@@ -90,10 +90,16 @@ final class HistoryViewModel: ObservableObject {
             let fetched = try await repository.fetchHistoryPage(offset: currentOffset, limit: pageSize + 1)
             let newItems = Array(fetched.prefix(pageSize))
             hasMore = fetched.count > pageSize
+
+            if newItems.isEmpty {
+                hasMore = false
+            }
+
             entries.append(contentsOf: newItems)
             currentOffset += newItems.count
             errorMessage = nil
         } catch {
+            hasMore = false
             reportError(error, fallbackMessage: "Failed to load more clipboard history.")
         }
 

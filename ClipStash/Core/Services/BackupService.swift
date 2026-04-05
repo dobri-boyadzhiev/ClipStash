@@ -23,11 +23,25 @@ enum BackupError: LocalizedError {
 final class BackupService: @unchecked Sendable {
     static let shared = BackupService()
     private let fileManager = FileManager.default
+    private var isBusy = false
+
+    /// Called by importBackup to request the app close its database before restore.
+    /// The closure must close the DB, stop monitors, etc., and then return.
+    var onCloseDatabaseForRestore: (@Sendable () async -> Void)?
 
     private init() {}
 
+    private func guardNotBusy() throws {
+        guard !isBusy else {
+            throw BackupError.internalError(NSError(domain: "BackupService", code: -1, userInfo: [NSLocalizedDescriptionKey: "A backup operation is already in progress."]))
+        }
+    }
+
     // MARK: - Export
     func exportBackup(to url: URL, password: String, database: AppDatabase, passphraseProvider: DatabasePassphraseProviding) async throws {
+        try guardNotBusy()
+        isBusy = true
+        defer { isBusy = false }
         let tempDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let contentDir = tempDir.appendingPathComponent("content")
         try fileManager.createDirectory(at: contentDir, withIntermediateDirectories: true)
@@ -91,6 +105,10 @@ final class BackupService: @unchecked Sendable {
 
     // MARK: - Import
     func importBackup(from url: URL, password: String) async throws {
+        try guardNotBusy()
+        isBusy = true
+        defer { isBusy = false }
+
         let fileData = try Data(contentsOf: url)
         guard fileData.count > 44 else { throw BackupError.backupCorrupted } // 32 salt + 12 nonce
 
@@ -133,6 +151,11 @@ final class BackupService: @unchecked Sendable {
 
         let manifestData = try Data(contentsOf: manifestURL)
         let manifest = try JSONDecoder().decode(BackupManifest.self, from: manifestData)
+        guard BackupManifest.supportedVersions.contains(manifest.version) else {
+            throw BackupError.internalError(NSError(domain: "BackupService", code: -2, userInfo: [
+                NSLocalizedDescriptionKey: "Unsupported backup version \(manifest.version). This app supports versions \(BackupManifest.supportedVersions.lowerBound)–\(BackupManifest.supportedVersions.upperBound)."
+            ]))
+        }
         guard let keychainSecret = Data(base64Encoded: manifest.keychainPassphraseBase64) else {
             throw BackupError.backupCorrupted
         }
@@ -148,36 +171,81 @@ final class BackupService: @unchecked Sendable {
         // Or we just throw a notification or let AppDelegate handle the swap.
         // Better: Do it here and then tell AppDelegate to restart.
 
-        // 1. Close current DB
-        NotificationCenter.default.post(name: NSNotification.Name("CloseDatabaseForRestore"), object: nil)
-
-        // Give the DB a bit of time to close (we wait asynchronously)
-        try await Task.sleep(nanoseconds: 500_000_000)
-
-        // 2. Delete existing DB and images
-        try? fileManager.removeItem(atPath: targetDBPath)
-        try? fileManager.removeItem(atPath: targetDBPath + "-shm")
-        try? fileManager.removeItem(atPath: targetDBPath + "-wal")
-        try? fileManager.removeItem(atPath: targetImagesPath)
-
-        // 3. Move extracted files
-        try fileManager.moveItem(atPath: dbURL.path, toPath: targetDBPath)
-
-        let walPath = dbURL.path + "-wal"
-        if fileManager.fileExists(atPath: walPath) {
-            try fileManager.moveItem(atPath: walPath, toPath: targetDBPath + "-wal")
+        // 1. Close current DB (awaits until the app confirms closure)
+        if let closeDatabase = onCloseDatabaseForRestore {
+            await closeDatabase()
         }
 
-        let shmPath = dbURL.path + "-shm"
-        if fileManager.fileExists(atPath: shmPath) {
-            try fileManager.moveItem(atPath: shmPath, toPath: targetDBPath + "-shm")
+        // 2. Rename existing data to .backup for atomic swap
+        let backupDBPath = targetDBPath + ".restore-backup"
+        let backupImagesPath = targetImagesPath + ".restore-backup"
+
+        // Clean up any stale backup from a previous failed restore
+        try? fileManager.removeItem(atPath: backupDBPath)
+        try? fileManager.removeItem(atPath: backupDBPath + "-shm")
+        try? fileManager.removeItem(atPath: backupDBPath + "-wal")
+        try? fileManager.removeItem(atPath: backupImagesPath)
+
+        // Rename current files to .backup (atomic — single rename per file)
+        if fileManager.fileExists(atPath: targetDBPath) {
+            try fileManager.moveItem(atPath: targetDBPath, toPath: backupDBPath)
+        }
+        if fileManager.fileExists(atPath: targetDBPath + "-wal") {
+            try fileManager.moveItem(atPath: targetDBPath + "-wal", toPath: backupDBPath + "-wal")
+        }
+        if fileManager.fileExists(atPath: targetDBPath + "-shm") {
+            try fileManager.moveItem(atPath: targetDBPath + "-shm", toPath: backupDBPath + "-shm")
+        }
+        if fileManager.fileExists(atPath: targetImagesPath) {
+            try fileManager.moveItem(atPath: targetImagesPath, toPath: backupImagesPath)
         }
 
-        if fileManager.fileExists(atPath: imagesURL.path) {
-            try fileManager.moveItem(atPath: imagesURL.path, toPath: targetImagesPath)
+        // 3. Move extracted files into place; roll back on failure
+        do {
+            try fileManager.moveItem(atPath: dbURL.path, toPath: targetDBPath)
+
+            let walPath = dbURL.path + "-wal"
+            if fileManager.fileExists(atPath: walPath) {
+                try fileManager.moveItem(atPath: walPath, toPath: targetDBPath + "-wal")
+            }
+
+            let shmPath = dbURL.path + "-shm"
+            if fileManager.fileExists(atPath: shmPath) {
+                try fileManager.moveItem(atPath: shmPath, toPath: targetDBPath + "-shm")
+            }
+
+            if fileManager.fileExists(atPath: imagesURL.path) {
+                try fileManager.moveItem(atPath: imagesURL.path, toPath: targetImagesPath)
+            }
+        } catch {
+            // Roll back: remove partially restored files and put originals back
+            try? fileManager.removeItem(atPath: targetDBPath)
+            try? fileManager.removeItem(atPath: targetDBPath + "-wal")
+            try? fileManager.removeItem(atPath: targetDBPath + "-shm")
+            try? fileManager.removeItem(atPath: targetImagesPath)
+
+            if fileManager.fileExists(atPath: backupDBPath) {
+                try? fileManager.moveItem(atPath: backupDBPath, toPath: targetDBPath)
+            }
+            if fileManager.fileExists(atPath: backupDBPath + "-wal") {
+                try? fileManager.moveItem(atPath: backupDBPath + "-wal", toPath: targetDBPath + "-wal")
+            }
+            if fileManager.fileExists(atPath: backupDBPath + "-shm") {
+                try? fileManager.moveItem(atPath: backupDBPath + "-shm", toPath: targetDBPath + "-shm")
+            }
+            if fileManager.fileExists(atPath: backupImagesPath) {
+                try? fileManager.moveItem(atPath: backupImagesPath, toPath: targetImagesPath)
+            }
+            throw BackupError.internalError(error)
         }
 
-        // 4. Update Keychain
+        // 4. Success — remove old backups
+        try? fileManager.removeItem(atPath: backupDBPath)
+        try? fileManager.removeItem(atPath: backupDBPath + "-shm")
+        try? fileManager.removeItem(atPath: backupDBPath + "-wal")
+        try? fileManager.removeItem(atPath: backupImagesPath)
+
+        // 5. Update Keychain
         let secretStore = KeychainSecretStore()
         let descriptor = DatabaseSecretDescriptor.clipStashPrimaryDatabase
         try? secretStore.deleteSecret(for: descriptor)
@@ -193,6 +261,11 @@ final class BackupService: @unchecked Sendable {
         }
 
         // 6. Request App Restart
-        NotificationCenter.default.post(name: NSNotification.Name("RestoreCompleted"), object: nil)
+        NotificationCenter.default.post(name: .backupRestoreCompleted, object: nil)
     }
+}
+
+// MARK: - Notification Names
+extension NSNotification.Name {
+    static let backupRestoreCompleted = NSNotification.Name("ClipStash.BackupRestoreCompleted")
 }

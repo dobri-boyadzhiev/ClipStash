@@ -177,7 +177,15 @@ final class SQLiteEntryRepository: EntryRepository, @unchecked Sendable {
     
     func findDuplicateText(textContent: String) async throws -> ClipboardEntry? {
         try await db.dbPool.read { db in
-            try ClipboardEntry
+            let hash = textContent.data(using: .utf8)?.sha256HexString
+            if let hash {
+                return try ClipboardEntry
+                    .filter(Column("type") == EntryType.text.rawValue)
+                    .filter(Column("contentHash") == hash)
+                    .fetchOne(db)
+            }
+            // Fallback for entries without contentHash
+            return try ClipboardEntry
                 .filter(Column("type") == EntryType.text.rawValue)
                 .filter(Column("textContent") == textContent)
                 .fetchOne(db)
@@ -186,7 +194,12 @@ final class SQLiteEntryRepository: EntryRepository, @unchecked Sendable {
 
     func findDuplicateRTF(textContent: String, rtfData: Data) async throws -> ClipboardEntry? {
         try await db.dbPool.read { db in
-            try ClipboardEntry
+            let hash = rtfData.sha256HexString
+            return try ClipboardEntry
+                .filter(Column("type") == EntryType.rtf.rawValue)
+                .filter(Column("contentHash") == hash)
+                .fetchOne(db)
+            ?? ClipboardEntry
                 .filter(Column("type") == EntryType.rtf.rawValue)
                 .filter(Column("textContent") == textContent)
                 .filter(Column("rtfData") == rtfData)
@@ -196,13 +209,20 @@ final class SQLiteEntryRepository: EntryRepository, @unchecked Sendable {
 
     func findDuplicateFileURLs(textContent: String) async throws -> ClipboardEntry? {
         try await db.dbPool.read { db in
-            try ClipboardEntry
+            let hash = textContent.data(using: .utf8)?.sha256HexString
+            if let hash {
+                return try ClipboardEntry
+                    .filter(Column("type") == EntryType.fileURL.rawValue)
+                    .filter(Column("contentHash") == hash)
+                    .fetchOne(db)
+            }
+            return try ClipboardEntry
                 .filter(Column("type") == EntryType.fileURL.rawValue)
                 .filter(Column("textContent") == textContent)
                 .fetchOne(db)
         }
     }
-    
+
     func findDuplicate(imageHash: String) async throws -> ClipboardEntry? {
         try await db.dbPool.read { db in
             try ClipboardEntry
@@ -231,10 +251,14 @@ final class SQLiteEntryRepository: EntryRepository, @unchecked Sendable {
                     LIMIT ?
                     """, arguments: [toDelete])
 
-                for id in idsToDelete {
-                    try db.execute(sql: "DELETE FROM clipboardEntry WHERE id = ?", arguments: [id])
+                if !idsToDelete.isEmpty {
+                    let placeholders = idsToDelete.map { _ in "?" }.joined(separator: ",")
+                    try db.execute(
+                        sql: "DELETE FROM clipboardEntry WHERE id IN (\(placeholders))",
+                        arguments: StatementArguments(idsToDelete)
+                    )
+                    deleted += idsToDelete.count
                 }
-                deleted += idsToDelete.count
             }
 
             let totalBytes = try Int.fetchOne(db, sql: """
@@ -259,10 +283,14 @@ final class SQLiteEntryRepository: EntryRepository, @unchecked Sendable {
                     idsToDelete.append(id)
                 }
 
-                for id in idsToDelete {
-                    try db.execute(sql: "DELETE FROM clipboardEntry WHERE id = ?", arguments: [id])
+                if !idsToDelete.isEmpty {
+                    let placeholders = idsToDelete.map { _ in "?" }.joined(separator: ",")
+                    try db.execute(
+                        sql: "DELETE FROM clipboardEntry WHERE id IN (\(placeholders))",
+                        arguments: StatementArguments(idsToDelete)
+                    )
+                    deleted += idsToDelete.count
                 }
-                deleted += idsToDelete.count
             }
 
             return deleted

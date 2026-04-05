@@ -1,6 +1,9 @@
 import Foundation
 
 struct BackupManifest: Codable {
+    static let currentVersion = 1
+    static let supportedVersions: ClosedRange<Int> = 1...1
+
     let version: Int
     let keychainPassphraseBase64: String
     
@@ -16,8 +19,9 @@ struct BackupManifest: Codable {
     let aiPromptMode: Int
     let customAIPrompt: String
     
+    @MainActor
     init(keychainPassphraseBase64: String, settings: AppSettings) {
-        self.version = 1
+        self.version = Self.currentVersion
         self.keychainPassphraseBase64 = keychainPassphraseBase64
         self.maxItems = settings.maxItems
         self.maxCacheSizeMB = settings.maxCacheSizeMB
@@ -31,6 +35,7 @@ struct BackupManifest: Codable {
         self.customAIPrompt = settings.customAIPrompt
     }
     
+    @MainActor
     func apply(to settings: AppSettings) {
         settings.maxItems = self.maxItems
         settings.maxCacheSizeMB = self.maxCacheSizeMB

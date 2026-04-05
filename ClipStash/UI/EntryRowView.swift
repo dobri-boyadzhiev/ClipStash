@@ -246,11 +246,16 @@ private enum ClipboardThumbnailRenderer {
 }
 
 // MARK: - Date formatting helper
+@MainActor
 extension Date {
-    var relativeFormatted: String {
+    private static let sharedRelativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: self, relativeTo: Date())
+        return formatter
+    }()
+
+    var relativeFormatted: String {
+        Self.sharedRelativeFormatter.localizedString(for: self, relativeTo: Date())
     }
 }
 
