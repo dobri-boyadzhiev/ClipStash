@@ -16,6 +16,8 @@ final class SettingsViewModel: ObservableObject {
     @Published var isFetchingModels: Bool = false
     @Published var fetchModelsError: String? = nil
 
+    private var loadModelsTask: Task<Void, Never>?
+
     private let repository: EntryRepository
     private let dataResetService: AppDataResetting
     
@@ -37,30 +39,38 @@ final class SettingsViewModel: ObservableObject {
         totalSizeMB = Double(bytes) / 1_048_576.0
     }
 
-    func loadAIModels() async {
+    func loadAIModels() {
         guard settings.isAIEnabled else { return }
 
-        isFetchingModels = true
-        fetchModelsError = nil
+        loadModelsTask?.cancel()
 
-        do {
-            let models = try await OllamaService.fetchAvailableModels(urlString: settings.ollamaUrl)
-
-            // Artificial delay to prevent UI flicker
+        loadModelsTask = Task { @MainActor in
+            // Debounce fetching models when typing URLs quickly
             try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
 
-            availableAIModels = models
+            isFetchingModels = true
+            fetchModelsError = nil
 
-            if !models.isEmpty && !models.contains(settings.ollamaModel) {
-                settings.ollamaModel = models.first!
+            do {
+                let models = try await OllamaService.fetchAvailableModels(urlString: settings.ollamaUrl)
+
+                guard !Task.isCancelled else { return }
+
+                availableAIModels = models
+
+                if !models.isEmpty && !models.contains(settings.ollamaModel) {
+                    settings.ollamaModel = models.first!
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                print("Failed to fetch AI models: \(error)")
+                availableAIModels = []
+                fetchModelsError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
-        } catch {
-            print("Failed to fetch AI models: \(error)")
-            availableAIModels = []
-            fetchModelsError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-        }
 
-        isFetchingModels = false
+            isFetchingModels = false
+        }
     }
 
     var localDataDirectoryPath: String {

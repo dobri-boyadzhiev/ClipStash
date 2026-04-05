@@ -140,9 +140,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let current = entryManager.latestEntry,
            let idx = entries.firstIndex(where: { $0.id == current.id }),
            idx + 1 < entries.count {
-            let _ = await historyViewModel.select(entries[idx + 1])
+            _ = await historyViewModel.select(entries[idx + 1])
         } else {
-            let _ = await historyViewModel.select(entries[0])
+            _ = await historyViewModel.select(entries[0])
         }
     }
     
@@ -152,9 +152,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let current = entryManager.latestEntry,
            let idx = entries.firstIndex(where: { $0.id == current.id }),
            idx > 0 {
-            let _ = await historyViewModel.select(entries[idx - 1])
+            _ = await historyViewModel.select(entries[idx - 1])
         } else if let last = entries.last {
-            let _ = await historyViewModel.select(last)
+            _ = await historyViewModel.select(last)
         }
     }
 

@@ -1,6 +1,5 @@
 import Carbon
 import AppKit
-import Combine
 
 /// Lightweight global hotkey service using Carbon APIs.
 /// Replaces the KeyboardShortcuts library to avoid #Preview macro build issues.
@@ -111,15 +110,4 @@ final class GlobalHotKeyService {
     }
 }
 
-// MARK: - Convenience registration methods
-extension GlobalHotKeyService {
-    /// Register Ctrl+Cmd+V to toggle the clipboard panel
-    func registerTogglePopover(handler: @escaping () -> Void) -> UInt32 {
-        register(keyCode: KeyCode.v, modifiers: Modifiers.cmdControl, handler: handler)
-    }
-    
-    /// Register Cmd+Shift+P to toggle private mode
-    func registerTogglePrivateMode(handler: @escaping () -> Void) -> UInt32 {
-        register(keyCode: KeyCode.p, modifiers: Modifiers.cmdShift, handler: handler)
-    }
-}
+

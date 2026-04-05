@@ -40,7 +40,7 @@ struct SettingsContentView: View {
                 if settings.isAIEnabled {
                     TextField("Host URL", text: $settings.ollamaUrl)
                         .onChange(of: settings.ollamaUrl) { _, _ in
-                            Task { await viewModel.loadAIModels() }
+                            viewModel.loadAIModels()
                         }
 
                     if viewModel.isFetchingModels {
@@ -54,7 +54,7 @@ struct SettingsContentView: View {
                             TextField("Model Name", text: $settings.ollamaModel)
 
                             Button {
-                                Task { await viewModel.loadAIModels() }
+                                viewModel.loadAIModels()
                             } label: {
                                 Image(systemName: "arrow.clockwise")
                                     .foregroundStyle(.secondary)
@@ -76,7 +76,7 @@ struct SettingsContentView: View {
                                 }
                             }
                             Button {
-                                Task { await viewModel.loadAIModels() }
+                                viewModel.loadAIModels()
                             } label: {
                                 Image(systemName: "arrow.clockwise")
                                     .foregroundStyle(.secondary)
@@ -219,12 +219,12 @@ struct SettingsContentView: View {
         .onAppear {
             Task {
                 await viewModel.loadStats()
-                await viewModel.loadAIModels()
             }
+            viewModel.loadAIModels()
         }
         .onChange(of: settings.isAIEnabled) { _, isEnabled in
             if isEnabled {
-                Task { await viewModel.loadAIModels() }
+                viewModel.loadAIModels()
             }
         }
     }
