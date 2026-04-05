@@ -66,13 +66,13 @@ final class OllamaService {
         let instructions: String
         switch promptMode {
         case 0:
-            instructions = "Fix all grammar and spelling errors in the following text. Do not change the tone or meaning. Output ONLY the corrected text without any preamble."
+            instructions = "Fix all grammar and spelling errors in the following text. Do not change the tone or meaning. IMPORTANT: You must strictly preserve the original language of the text. Do NOT translate it to Russian, English, or any other language. Output ONLY the corrected text without any preamble."
         case 1:
-            instructions = "Rewrite the following text to sound professional, polite, and suitable for business communication. Output ONLY the revised text without any preamble."
+            instructions = "Rewrite the following text to sound professional, polite, and suitable for business communication. IMPORTANT: You must strictly preserve the original language of the text. Do NOT translate it to Russian, English, or any other language. Output ONLY the revised text without any preamble."
         case 2:
-            instructions = "\(customPrompt)\n\nOutput ONLY the revised text without any preamble."
+            instructions = "\(customPrompt)\n\nOutput ONLY the revised text without any preamble. Preserve the original language."
         default:
-            instructions = "Fix all grammar and spelling errors in the following text. Do not change the tone or meaning. Output ONLY the corrected text without any preamble."
+            instructions = "Fix all grammar and spelling errors in the following text. Do not change the tone or meaning. IMPORTANT: You must strictly preserve the original language of the text. Do NOT translate it. Output ONLY the corrected text without any preamble."
         }
 
         let prompt = text

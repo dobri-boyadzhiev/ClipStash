@@ -167,16 +167,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 2. Simulate Cmd+C to copy selected text
         simulateKeystroke(keyCode: 8, modifiers: .maskCommand) // 8 is C
 
-        // Wait for clipboard to update
-        try? await Task.sleep(nanoseconds: 150_000_000) // 150ms
+        // Wait for clipboard to update (up to 500ms)
+        var waited = 0
+        while NSPasteboard.general.changeCount == initialChangeCount && waited < 500 {
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+            waited += 50
+        }
 
-        // If nothing was copied (e.g. no text selected), cancel the debounce
+        // If nothing was copied (e.g. no text selected or modifiers blocked the copy), cancel the debounce
         if NSPasteboard.general.changeCount == initialChangeCount {
             clipboardMonitor.cancelDebounce()
             return
         }
 
-        guard let text = NSPasteboard.general.string(forType: .string) else { return }
+        guard let text = NSPasteboard.general.string(forType: .string) else {
+            clipboardMonitor.cancelDebounce()
+            return
+        }
 
         do {
             let improvedText = try await OllamaService.improveText(
