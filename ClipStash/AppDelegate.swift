@@ -159,11 +159,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func performMagicReplace() async {
-        // Simulate Cmd+C to copy selected text
+        let initialChangeCount = NSPasteboard.general.changeCount
+
+        // 1. Tell ClipboardMonitor to ignore the next change
+        clipboardMonitor.beginDebounce()
+
+        // 2. Simulate Cmd+C to copy selected text
         simulateKeystroke(keyCode: 8, modifiers: .maskCommand) // 8 is C
 
         // Wait for clipboard to update
         try? await Task.sleep(nanoseconds: 150_000_000) // 150ms
+
+        // If nothing was copied (e.g. no text selected), cancel the debounce
+        if NSPasteboard.general.changeCount == initialChangeCount {
+            clipboardMonitor.cancelDebounce()
+            return
+        }
 
         guard let text = NSPasteboard.general.string(forType: .string) else { return }
 
@@ -178,6 +189,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             // Save to entryManager so it's in history
             await self.entryManager.processNewText(improvedText, source: "Ollama", sourceName: "✨ AI Assistant")
+
+            // 3. Tell ClipboardMonitor to ignore the upcoming change we are about to make
+            clipboardMonitor.beginDebounce()
 
             // Write to pasteboard
             NSPasteboard.general.clearContents()
