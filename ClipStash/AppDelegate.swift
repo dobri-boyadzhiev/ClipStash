@@ -165,7 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         clipboardMonitor.beginDebounce()
 
         // 2. Simulate Cmd+C to copy selected text
-        simulateKeystroke(keyCode: 8, modifiers: .maskCommand) // 8 is C
+        await simulateKeystroke(keyCode: 8, modifiers: .maskCommand) // 8 is C
 
         // Wait for clipboard to update (up to 500ms)
         var waited = 0
@@ -208,13 +208,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
 
             // Simulate Cmd+V to paste
-            simulateKeystroke(keyCode: 9, modifiers: .maskCommand) // 9 is V
+            await simulateKeystroke(keyCode: 9, modifiers: .maskCommand) // 9 is V
         } catch {
             print("Magic Replace failed: \(error)")
         }
     }
 
-    private func simulateKeystroke(keyCode: CGKeyCode, modifiers: CGEventFlags) {
+    private func simulateKeystroke(keyCode: CGKeyCode, modifiers: CGEventFlags) async {
         let source = CGEventSource(stateID: .hidSystemState)
         let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true)
         let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
@@ -223,6 +223,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         keyUp?.flags = modifiers
 
         keyDown?.post(tap: .cghidEventTap)
+        // Add a small 20ms delay between key down and key up to ensure the OS registers it
+        try? await Task.sleep(nanoseconds: 20_000_000)
         keyUp?.post(tap: .cghidEventTap)
     }
 
