@@ -808,13 +808,16 @@ struct TestMain {
         }
 
         await t.run("Settings view model triggers delete all data flow") {
-            let db = try AppDatabase.inMemory()
+            let provider = try EphemeralDatabasePassphraseProvider()
+            let db = try AppDatabase(path: FileManager.default.temporaryDirectory.appendingPathComponent("test1.db").path, passphraseProvider: provider)
             let repo = SQLiteEntryRepository(database: db)
             let resetService = StubDataResetService()
             let viewModel = SettingsViewModel(
                 settings: AppSettings.shared,
                 repository: repo,
                 dataResetService: resetService,
+                database: db,
+                databasePassphraseProvider: provider,
                 databaseSecurityStatus: .keychainBacked(
                     databasePath: AppDatabase.defaultPath,
                     keyStorageDescription: "macOS Keychain"
@@ -828,7 +831,8 @@ struct TestMain {
         }
 
         await t.run("Settings view model surfaces reset errors") {
-            let db = try AppDatabase.inMemory()
+            let provider = try EphemeralDatabasePassphraseProvider()
+            let db = try AppDatabase(path: FileManager.default.temporaryDirectory.appendingPathComponent("test2.db").path, passphraseProvider: provider)
             let repo = SQLiteEntryRepository(database: db)
             let resetService = StubDataResetService()
             resetService.error = TestError(message: "Boom")
@@ -836,6 +840,8 @@ struct TestMain {
                 settings: AppSettings.shared,
                 repository: repo,
                 dataResetService: resetService,
+                database: db,
+                databasePassphraseProvider: provider,
                 databaseSecurityStatus: .keychainBacked(
                     databasePath: AppDatabase.defaultPath,
                     keyStorageDescription: "macOS Keychain"

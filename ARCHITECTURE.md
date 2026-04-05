@@ -1,6 +1,6 @@
 # ClipStash — Architecture Documentation
 
-This document describes every module, protocol, data flow, and design decision in detail.  
+This document describes every module, protocol, data flow, and design decision in detail.
 Use this as a reference when reviewing, extending, or debugging the project.
 
 ---
@@ -28,7 +28,7 @@ UI (SwiftUI)  →  ViewModels  →  Core Services  →  Storage (SQLite)
                                                 →  Platform (AppKit/Carbon)
 ```
 
-**Dependency rule:** Each layer only depends on the layer directly below it.  
+**Dependency rule:** Each layer only depends on the layer directly below it.
 Core depends on NOTHING — it defines protocols that Storage and Platform implement.
 
 ### SPM Targets
@@ -39,15 +39,15 @@ Core depends on NOTHING — it defines protocols that Storage and Platform imple
 | `ClipStashApp` | Executable | `ClipStashEntry/` | 3-line entry point that calls `runApp()` |
 | `ClipStashTests` | Executable | `ClipStashTests/` | Standalone test runner with regression coverage |
 
-Why a library + executable split?  
+Why a library + executable split?
 → SPM can't run tests against executable targets, so the library is testable.
 
 ---
 
 ## 2. Core Layer
 
-**Path:** `ClipStash/Core/`  
-**Imports:** Only `Foundation` and `GRDB` (for record conformance)  
+**Path:** `ClipStash/Core/`
+**Imports:** Only `Foundation` and `GRDB` (for record conformance)
 **Purpose:** Business logic with zero macOS dependencies
 
 ### 2.1 Models
@@ -108,6 +108,10 @@ Singleton (`AppSettings.shared`) using `@AppStorage` for persistence.
 | `ollamaModel` | `llama3.2` | Model to use for AI |
 | `aiPromptMode` | 0 | 0=Grammar, 1=Pro, 2=Custom |
 
+
+#### `BackupManifest` (Core/Models/BackupManifest.swift)
+
+Codable model that stores application settings and the Base64-encoded Keychain passphrase when exporting a backup archive. Used during restore to fully recover the app state.
 ### 2.2 Protocols
 
 #### `EntryRepository` (Core/Protocols/EntryRepository.swift)
@@ -190,6 +194,13 @@ Key methods:
 
 Handles communication with a local Ollama API to rewrite text using LLMs (e.g., Llama 3, Gemma). Uses the `/api/generate` endpoint with `system` and `prompt` separation to prevent conversational responses. Provides a stateless `improveText` method.
 
+
+#### `BackupService` (Core/Services/BackupService.swift)
+
+Handles creating and extracting encrypted `.clipstash_backup` archives.
+- **Export**: Uses GRDB's concurrent backup API (`dbPool.backup()`) to copy the database, zips it along with the image cache and manifest, and encrypts the ZIP using `CryptoKit` (AES-GCM with HKDF-SHA256 key derivation from the user's password).
+- **Import**: Decrypts the archive using the provided password, verifies contents, hot-swaps the database and image cache directory, updates the Keychain secret, and triggers an app restart.
+
 ---
 
 ## 3. Storage Layer
@@ -210,8 +221,8 @@ Creates and configures the SQLite database using GRDB + SQLCipher.
 - `v1_createClipboardEntry` — creates main table with indices
 - `v1_createFTS` — creates FTS5 virtual table for full-text search
 
-**FTS5 tokenizer:** Porter stemmer wrapping unicode61  
-→ Handles English stemming ("programming" matches "program")  
+**FTS5 tokenizer:** Porter stemmer wrapping unicode61
+→ Handles English stemming ("programming" matches "program")
 → Unicode-aware tokenization
 
 **Important paths:**
@@ -238,7 +249,7 @@ That last rule prevents “history disappeared” bugs caused by accidentally op
 
 ### 3.3 `SQLiteEntryRepository` (Storage/SQLiteEntryRepository.swift)
 
-Implements `EntryRepository` protocol using GRDB.  
+Implements `EntryRepository` protocol using GRDB.
 197 lines covering all CRUD, search, prune, and dedup operations.
 
 **Search strategy:**
@@ -263,7 +274,7 @@ Has `cleanOrphans(validHashes:)` for removing files no longer referenced in DB.
 
 ## 4. Platform Layer
 
-**Path:** `ClipStash/Platform/`  
+**Path:** `ClipStash/Platform/`
 **macOS-specific code** that can't exist in Core.
 
 ### 4.1 `ClipboardMonitor` (Platform/ClipboardMonitor.swift)
@@ -279,7 +290,7 @@ Why polling? macOS has no clipboard change API:
 - Fast enough to catch normal copy actions
 - Lighter on battery than a fixed aggressive timer
 
-**Content detection priority:** RTF → Text → Image → File URLs  
+**Content detection priority:** RTF → Text → Image → File URLs
 (RTF contains plain text too, so we prefer RTF when available)
 
 **Debounce mechanism:** When we write to the clipboard ourselves, we increment `debounceCount` to skip the next change detection.
@@ -307,7 +318,7 @@ Registered shortcuts:
 
 ### 4.3 `LoginItemHelper` (Platform/LoginItemHelper.swift)
 
-Wraps LaunchAtLogin library's `LaunchAtLogin.Toggle` SwiftUI view.  
+Wraps LaunchAtLogin library's `LaunchAtLogin.Toggle` SwiftUI view.
 Uses `SMAppService` under the hood (macOS 13+ modern API).
 
 ---
@@ -466,7 +477,7 @@ All objects are created once and live for the app's lifetime.
 
 ### Virtual Table: `clipboardEntryFts` (FTS5)
 
-Synchronized with `clipboardEntry`. Indexes `textContent` column.  
+Synchronized with `clipboardEntry`. Indexes `textContent` column.
 Tokenizer: Porter stemmer wrapping unicode61.
 
 ---
@@ -497,14 +508,14 @@ Tokenizer: Porter stemmer wrapping unicode61.
 
 ### Why Carbon hotkeys instead of KeyboardShortcuts library?
 
-KeyboardShortcuts uses Swift macros (#Preview) that require Xcode to build.  
-Since this project targets `swift build` CLI, we use Carbon's `RegisterEventHotKey` directly.  
+KeyboardShortcuts uses Swift macros (#Preview) that require Xcode to build.
+Since this project targets `swift build` CLI, we use Carbon's `RegisterEventHotKey` directly.
 It's ~120 lines, battle-tested (Carbon hotkey API exists since macOS 10.0).
 
 ### Why polling instead of callbacks?
 
-macOS provides no clipboard change callback.  
-`NSPasteboard.general.changeCount` is the official approach used by all clipboard managers.  
+macOS provides no clipboard change callback.
+`NSPasteboard.general.changeCount` is the official approach used by all clipboard managers.
 ClipStash uses adaptive polling with timer tolerance to reduce wakeups in Low Power Mode and Private Mode.
 
 ### Why `@AppStorage` instead of a settings file?

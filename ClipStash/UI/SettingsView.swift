@@ -16,6 +16,9 @@ struct SettingsContentView: View {
     @ObservedObject private var settings: AppSettings
     @State private var showDeleteDataConfirmation = false
     @State private var showAdvancedDataDetails = false
+    @State private var isExporting = false
+    @State private var isImporting = false
+    @State private var backupPassword = ""
 
     init(viewModel: SettingsViewModel) {
         self.viewModel = viewModel
@@ -119,6 +122,72 @@ struct SettingsContentView: View {
                 LabeledContent("Previous entry") { Text("⌘⇧←").foregroundStyle(.secondary) }
                 LabeledContent("Next entry") { Text("⌘⇧→").foregroundStyle(.secondary) }
             }
+            Section("Backup & Restore") {
+                Text("Export your clipboard history, images, and settings to a secure, password-protected archive. You can import this archive on another Mac or after a fresh installation.")
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    Button("Export Backup...") {
+                        isExporting = true
+                        backupPassword = ""
+                    }
+                    .disabled(viewModel.isProcessingBackup)
+
+                    Button("Import Backup...") {
+                        isImporting = true
+                        backupPassword = ""
+                    }
+                    .disabled(viewModel.isProcessingBackup)
+
+                    if viewModel.isProcessingBackup {
+                        ProgressView().controlSize(.small)
+                            .padding(.leading, 4)
+                    }
+                }
+
+                if let error = viewModel.backupErrorMessage {
+                    Text(error)
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                }
+            }
+            .alert("Export Backup", isPresented: $isExporting) {
+                SecureField("Encryption Password", text: $backupPassword)
+                Button("Cancel", role: .cancel) { }
+                Button("Export") {
+                    let panel = NSSavePanel()
+                    panel.allowedContentTypes = [.data]
+                    let dateStr = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .none).replacingOccurrences(of: "/", with: "-")
+                    panel.nameFieldStringValue = "ClipStash_Backup_\(dateStr).clipstash_backup"
+                    panel.prompt = "Export"
+
+                    if panel.runModal() == .OK, let url = panel.url {
+                        Task { await viewModel.exportBackup(to: url, password: backupPassword) }
+                    }
+                }
+                .disabled(backupPassword.isEmpty)
+            } message: {
+                Text("Enter a password to securely encrypt your backup. You will need this password to restore your data.")
+            }
+            .alert("Import Backup", isPresented: $isImporting) {
+                SecureField("Backup Password", text: $backupPassword)
+                Button("Cancel", role: .cancel) { }
+                Button("Import") {
+                    let panel = NSOpenPanel()
+                    panel.canChooseFiles = true
+                    panel.canChooseDirectories = false
+                    panel.allowedContentTypes = [.data]
+                    panel.prompt = "Import"
+
+                    if panel.runModal() == .OK, let url = panel.url {
+                        Task { await viewModel.importBackup(from: url, password: backupPassword) }
+                    }
+                }
+                .disabled(backupPassword.isEmpty)
+            } message: {
+                Text("Enter the password that was used to encrypt this backup archive.")
+            }
+
 
             Section("Data") {
                 Text("ClipStash stores its database and cached images locally on this Mac.")

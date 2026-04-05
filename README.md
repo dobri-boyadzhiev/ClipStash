@@ -14,6 +14,7 @@ Inspired by the GNOME Clipboard History extension, rebuilt from scratch for macO
 | 📊 **Source Tracking** | Shows which app each clipboard entry came from |
 | ♻️ **Deduplication** | Same text copied twice? Just moves to top (no duplicates) |
 | 🤖 **AI Assistant** | Use local models via Ollama to instantly improve/rewrite copied text securely |
+| 💾 **Backup & Restore** | Export history and settings to an encrypted, password-protected archive |
 | 🧹 **Auto Pruning** | Old entries pruned automatically by count or total size |
 | 🚀 **Launch at Login** | Runs silently in menu bar on startup |
 | ✂️ **Strip Whitespace** | Optional automatic trimming of copied text |
@@ -106,13 +107,15 @@ ClipStash/
 │   │   ├── Models/
 │   │   │   ├── EntryType.swift            # .text | .image | .rtf | .fileURL
 │   │   │   ├── ClipboardEntry.swift       # Main data model (GRDB record)
-│   │   │   └── AppSettings.swift          # All settings via @AppStorage
+│   │   │   ├── AppSettings.swift          # All settings via @AppStorage
+│   │   │   └── BackupManifest.swift       # Backup metadata and settings
 │   │   ├── Protocols/
 │   │   │   ├── EntryRepository.swift      # Data access interface
 │   │   │   └── ClipboardAccessor.swift    # Clipboard write abstraction
 │   │   └── Services/
 │   │       ├── EntryManager.swift         # Business logic: save, dedup, prune
-│   │       └── AppDataResetService.swift  # Delete-all-data flow + app reset
+│   │       ├── AppDataResetService.swift  # Delete-all-data flow + app reset
+│   │       └── BackupService.swift        # Encrypted backup & restore
 │   │
 │   ├── Storage/                           # SQLite persistence
 │   │   ├── Database.swift                 # WAL mode, FTS5, schema migrations
@@ -183,6 +186,7 @@ The project follows a **4-layer architecture** with strict dependency rules:
 | [GRDB.swift](https://github.com/groue/GRDB.swift) | SQLite wrapper | Fast, type-safe, FTS5 support, migrations, Swift Concurrency |
 | [SQLCipher.swift](https://github.com/sqlcipher/SQLCipher.swift) | Encrypted SQLite binary | Protects clipboard history at rest |
 | [LaunchAtLogin-Modern](https://github.com/sindresorhus/LaunchAtLogin-Modern) | Start at login | Uses SMAppService (modern macOS API), 10 lines of code |
+| [ZIPFoundation](https://github.com/weichsel/ZIPFoundation) | ZIP archives | Creates and extracts backup archives seamlessly |
 
 ## Data Storage
 

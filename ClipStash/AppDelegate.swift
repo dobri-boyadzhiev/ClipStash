@@ -64,6 +64,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settings: settings,
             repository: repository,
             dataResetService: dataResetService,
+            database: database,
+            databasePassphraseProvider: databasePassphraseProvider,
             databaseSecurityStatus: databaseSecurityStatus
         )
         statusItemController = StatusItemController(
@@ -72,6 +74,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             historyViewModel: historyViewModel,
             settingsViewModel: settingsViewModel
         )
+
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("CloseDatabaseForRestore"), object: nil, queue: nil) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.clipboardMonitor.stop()
+                self?.hotKeyService.unregisterAll()
+                try? self?.database.dbPool.close()
+            }
+        }
+
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("RestoreCompleted"), object: nil, queue: nil) { _ in
+            DispatchQueue.main.async {
+                let alert = NSAlert()
+                alert.messageText = "Restore Successful"
+                alert.informativeText = "ClipStash has been restored successfully. The app will now quit. Please reopen it to apply the changes."
+                alert.alertStyle = .informational
+                alert.addButton(withTitle: "Quit")
+                alert.runModal()
+                NSApp.terminate(nil)
+            }
+        }
     }
     
     func applicationDidFinishLaunching(_ notification: Notification) {

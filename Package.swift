@@ -9,6 +9,7 @@ let package = Package(
     dependencies: [
         .package(path: "Vendor/GRDBEncrypted"),
         .package(url: "https://github.com/sindresorhus/LaunchAtLogin-Modern.git", from: "1.1.0"),
+        .package(url: "https://github.com/weichsel/ZIPFoundation.git", .upToNextMajor(from: "0.9.19"))
     ],
     targets: [
         .target(
@@ -16,6 +17,7 @@ let package = Package(
             dependencies: [
                 .product(name: "GRDB", package: "GRDBEncrypted"),
                 .product(name: "LaunchAtLogin", package: "LaunchAtLogin-Modern"),
+                .product(name: "ZIPFoundation", package: "ZIPFoundation")
             ],
             path: "ClipStash"
         ),
