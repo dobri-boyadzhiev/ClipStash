@@ -14,6 +14,7 @@ final class SettingsViewModel: ObservableObject {
 
     @Published var availableAIModels: [String] = []
     @Published var isFetchingModels: Bool = false
+    @Published var fetchModelsError: String? = nil
 
     private let repository: EntryRepository
     private let dataResetService: AppDataResetting
@@ -38,21 +39,28 @@ final class SettingsViewModel: ObservableObject {
 
     func loadAIModels() async {
         guard settings.isAIEnabled else { return }
+
         isFetchingModels = true
-        defer { isFetchingModels = false }
+        fetchModelsError = nil
 
         do {
             let models = try await OllamaService.fetchAvailableModels(urlString: settings.ollamaUrl)
+
+            // Artificial delay to prevent UI flicker
+            try? await Task.sleep(nanoseconds: 300_000_000)
+
             availableAIModels = models
 
-            // Auto-select if current model is invalid or empty but we have models
             if !models.isEmpty && !models.contains(settings.ollamaModel) {
                 settings.ollamaModel = models.first!
             }
         } catch {
             print("Failed to fetch AI models: \(error)")
             availableAIModels = []
+            fetchModelsError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
+
+        isFetchingModels = false
     }
 
     var localDataDirectoryPath: String {

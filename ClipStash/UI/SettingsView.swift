@@ -8,17 +8,6 @@ struct SettingsView: View {
     var body: some View {
         SettingsContentView(viewModel: viewModel)
             .frame(width: 480, height: 420)
-            .onAppear {
-                Task {
-                    await viewModel.loadStats()
-                    await viewModel.loadAIModels()
-                }
-            }
-            .onChange(of: viewModel.settings.isAIEnabled) { _, isEnabled in
-                if isEnabled {
-                    Task { await viewModel.loadAIModels() }
-                }
-            }
     }
 }
 
@@ -61,7 +50,24 @@ struct SettingsContentView: View {
                             ProgressView().controlSize(.small)
                         }
                     } else if viewModel.availableAIModels.isEmpty {
-                        TextField("Model Name", text: $settings.ollamaModel)
+                        HStack {
+                            TextField("Model Name", text: $settings.ollamaModel)
+
+                            Button {
+                                Task { await viewModel.loadAIModels() }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Retry fetching models")
+                        }
+
+                        if let error = viewModel.fetchModelsError {
+                            Text("Failed to load models: \(error)")
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
                     } else {
                         HStack {
                             Picker("Model Name", selection: $settings.ollamaModel) {
@@ -210,6 +216,17 @@ struct SettingsContentView: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear {
+            Task {
+                await viewModel.loadStats()
+                await viewModel.loadAIModels()
+            }
+        }
+        .onChange(of: settings.isAIEnabled) { _, isEnabled in
+            if isEnabled {
+                Task { await viewModel.loadAIModels() }
+            }
+        }
     }
 
     private var storageLimitLabel: String {
