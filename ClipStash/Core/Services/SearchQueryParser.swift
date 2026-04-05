@@ -234,11 +234,21 @@ enum SearchQueryParser {
     }
 
     private static func parseDate(_ rawValue: String) -> Date? {
-        dateFormatter.date(from: rawValue)
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = Calendar.current.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: rawValue)
     }
 
     private static func formatDate(_ date: Date) -> String {
-        dateFormatter.string(from: date)
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = Calendar.current.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
     }
 
     private static func serializeTerm(_ term: String) -> String {
@@ -251,13 +261,4 @@ enum SearchQueryParser {
         }
         return value
     }
-
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = Calendar.current.timeZone
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
 }

@@ -15,7 +15,7 @@ final class ClipboardMonitor: ObservableObject {
     private let logger = Logger(subsystem: "ClipStash", category: "ClipboardMonitor")
     private let pasteboard = NSPasteboard.general
     private var lastChangeCount: Int = 0
-    private var timer: Timer?
+    private var pollTask: Task<Void, Never>?
     private let entryManager: EntryManager
     private let settings: AppSettings
     
@@ -28,15 +28,22 @@ final class ClipboardMonitor: ObservableObject {
     }
     
     func start() {
-        guard timer == nil else { return }
+        guard pollTask == nil else { return }
         lastChangeCount = pasteboard.changeCount
         isRunning = true
-        scheduleNextCheck()
+        pollTask = Task { @MainActor [weak self] in
+            while let self = self, !Task.isCancelled {
+                let interval = self.currentPollSchedule().interval
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                guard !Task.isCancelled else { break }
+                self.checkForChanges()
+            }
+        }
     }
-    
+
     func stop() {
-        timer?.invalidate()
-        timer = nil
+        pollTask?.cancel()
+        pollTask = nil
         isRunning = false
     }
     
@@ -112,23 +119,5 @@ final class ClipboardMonitor: ObservableObject {
                 await entryManager.processNewFileURLs(paths, source: sourceBundle, sourceName: sourceName)
             }
         }
-    }
-
-    private func scheduleNextCheck() {
-        guard isRunning else { return }
-
-        let schedule = currentPollSchedule()
-        let timer = Timer(timeInterval: schedule.interval, repeats: false) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
-                self.timer = nil
-                self.checkForChanges()
-                self.scheduleNextCheck()
-            }
-        }
-
-        timer.tolerance = schedule.tolerance
-        self.timer = timer
-        RunLoop.main.add(timer, forMode: .common)
     }
 }

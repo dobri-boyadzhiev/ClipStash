@@ -22,9 +22,9 @@ enum SearchFilterChip: Hashable, Identifiable, Sendable {
         case .favoritesOnly:
             return "favorite"
         case .after(let date):
-            return "after:\(Self.isoDateFormatter.string(from: date))"
+            return "after:\(date.formatted(.iso8601.year().month().day().dateSeparator(.dash)))"
         case .before(let date):
-            return "before:\(Self.isoDateFormatter.string(from: date))"
+            return "before:\(date.formatted(.iso8601.year().month().day().dateSeparator(.dash)))"
         }
     }
 
@@ -41,9 +41,9 @@ enum SearchFilterChip: Hashable, Identifiable, Sendable {
         case .favoritesOnly:
             return "Favorite"
         case .after(let date):
-            return "After \(Self.shortDateFormatter.string(from: date))"
+            return "After \(date.formatted(date: .abbreviated, time: .omitted))"
         case .before(let date):
-            return "Before \(Self.shortDateFormatter.string(from: date))"
+            return "Before \(date.formatted(date: .abbreviated, time: .omitted))"
         }
     }
 
@@ -65,22 +65,6 @@ enum SearchFilterChip: Hashable, Identifiable, Sendable {
             return "calendar.badge.minus"
         }
     }
-
-    private static let isoDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
-
-    private static let shortDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        return formatter
-    }()
 }
 
 struct SearchCriteria: Equatable, Sendable {

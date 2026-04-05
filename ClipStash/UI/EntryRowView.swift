@@ -186,11 +186,7 @@ struct ClipboardCachedImageView: View {
             return
         }
 
-        let thumbnailTask = Task.detached(priority: .utility) { () -> NSImage? in
-            guard let data = await imageCache.load(forHash: hash) else { return nil }
-            return ClipboardThumbnailRenderer.makeThumbnail(from: data, maxPixelSize: thumbnailMaxPixelSize)
-        }
-        let loadedThumbnail = await thumbnailTask.value
+        let loadedThumbnail = await generateThumbnail(imageCache: imageCache, hash: hash, maxPixelSize: thumbnailMaxPixelSize)
 
         if let loadedThumbnail {
             ClipboardThumbnailMemoryCache.shared.setObject(loadedThumbnail, forKey: cacheKey)
@@ -199,6 +195,13 @@ struct ClipboardCachedImageView: View {
         } else {
             failedToLoad = true
         }
+    }
+
+    nonisolated private func generateThumbnail(imageCache: ImageCacheProtocol, hash: String, maxPixelSize: Int) async -> NSImage? {
+        guard !Task.isCancelled else { return nil }
+        guard let data = await imageCache.load(forHash: hash) else { return nil }
+        guard !Task.isCancelled else { return nil }
+        return ClipboardThumbnailRenderer.makeThumbnail(from: data, maxPixelSize: maxPixelSize)
     }
 }
 

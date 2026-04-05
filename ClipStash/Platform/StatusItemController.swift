@@ -13,6 +13,7 @@ final class StatusItemController {
     private let settingsViewModel: SettingsViewModel
     private let popoverState = PopoverState()
     private var cancellables = Set<AnyCancellable>()
+    private var loadTask: Task<Void, Never>?
 
     init(
         settings: AppSettings,
@@ -41,12 +42,12 @@ final class StatusItemController {
         guard let button = statusItem.button else { return }
 
         popoverState.showHistory()
-        Task { @MainActor in
+        loadTask?.cancel()
+        loadTask = Task { @MainActor in
             await historyViewModel.loadInitial()
         }
         updatePopoverSize()
         updateStatusItemAppearance()
-        NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
 
         DispatchQueue.main.async {
@@ -56,6 +57,8 @@ final class StatusItemController {
     }
 
     func closePopover() {
+        loadTask?.cancel()
+        loadTask = nil
         popover.performClose(nil)
     }
 
