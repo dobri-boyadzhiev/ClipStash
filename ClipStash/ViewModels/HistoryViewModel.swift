@@ -163,7 +163,7 @@ final class HistoryViewModel: ObservableObject {
     
     // MARK: - Actions
 
-    func improveText(for entry: ClipboardEntry) async {
+    func improveText(for entry: ClipboardEntry, promptModeOverride: Int? = nil) async {
         guard let text = entry.textContent else { return }
 
         isLoading = true
@@ -174,7 +174,7 @@ final class HistoryViewModel: ObservableObject {
                 text,
                 urlString: settings.ollamaUrl,
                 model: settings.ollamaModel,
-                promptMode: settings.aiPromptMode,
+                promptMode: promptModeOverride ?? settings.aiPromptMode,
                 customPrompt: settings.customAIPrompt
             )
 
@@ -184,10 +184,9 @@ final class HistoryViewModel: ObservableObject {
                 sourceName: "✨ AI Assistant"
             )
 
-            DispatchQueue.main.async {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(improvedText, forType: .string)
-            }
+            clipboardMonitor.beginDebounce()
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(improvedText, forType: .string)
 
             await loadInitial()
         } catch {

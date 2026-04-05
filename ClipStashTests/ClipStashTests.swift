@@ -182,6 +182,7 @@ struct TestMain {
                 textContent: "/tmp/Same",
                 rtfData: nil,
                 imageHash: nil,
+                contentHash: "/tmp/Same".data(using: .utf8)?.sha256HexString,
                 sourceAppBundleId: nil,
                 sourceAppName: nil,
                 isFavorite: false,
@@ -377,6 +378,53 @@ struct TestMain {
                 t.check(false, "Opening with a different passphrase should fail")
             } catch {
                 t.check(true, "Expected encrypted database open to fail with a different passphrase")
+            }
+        }
+
+        await t.run("Backup service validates an imported database before restore") {
+            let tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent("clipstash-restore-validation-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: tempRoot) }
+
+            let databaseURL = tempRoot.appendingPathComponent("clipboard.db")
+            let provider = try EphemeralDatabasePassphraseProvider()
+            let passphrase = try provider.passphrase()
+            let db = try AppDatabase(path: databaseURL.path, passphraseProvider: provider)
+            let repo = SQLiteEntryRepository(database: db)
+            var entry = ClipboardEntry.text("Restorable")
+            try await repo.save(&entry)
+            try db.close()
+
+            try BackupService.shared.validateImportedDatabase(at: databaseURL.path, passphrase: passphrase)
+        }
+
+        await t.run("Backup service rejects an imported database when the manifest key does not match") {
+            let tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent("clipstash-restore-validation-mismatch-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: tempRoot) }
+
+            let databaseURL = tempRoot.appendingPathComponent("clipboard.db")
+            let provider = try EphemeralDatabasePassphraseProvider()
+            let db = try AppDatabase(path: databaseURL.path, passphraseProvider: provider)
+            let repo = SQLiteEntryRepository(database: db)
+            var entry = ClipboardEntry.text("Encrypted")
+            try await repo.save(&entry)
+            try db.close()
+
+            let wrongPassphrase = try KeychainDatabasePassphraseProvider.generateRandomKey(byteCount: 32)
+
+            do {
+                try BackupService.shared.validateImportedDatabase(at: databaseURL.path, passphrase: wrongPassphrase)
+                t.check(false, "Validation should reject a database when the imported key does not match")
+            } catch let error as BackupError {
+                switch error {
+                case .backupCorrupted:
+                    t.check(true, "Expected backup validation to fail before restore commits")
+                default:
+                    t.check(false, "Unexpected backup error: \(error.localizedDescription)")
+                }
+            } catch {
+                t.check(false, "Unexpected error: \(error.localizedDescription)")
             }
         }
 
@@ -809,7 +857,7 @@ struct TestMain {
 
         await t.run("Settings view model triggers delete all data flow") {
             let provider = try EphemeralDatabasePassphraseProvider()
-            let db = try AppDatabase(path: FileManager.default.temporaryDirectory.appendingPathComponent("test1.db").path, passphraseProvider: provider)
+            let db = try AppDatabase(path: FileManager.default.temporaryDirectory.appendingPathComponent("test-\(UUID().uuidString).db").path, passphraseProvider: provider)
             let repo = SQLiteEntryRepository(database: db)
             let resetService = StubDataResetService()
             let viewModel = SettingsViewModel(
@@ -832,7 +880,7 @@ struct TestMain {
 
         await t.run("Settings view model surfaces reset errors") {
             let provider = try EphemeralDatabasePassphraseProvider()
-            let db = try AppDatabase(path: FileManager.default.temporaryDirectory.appendingPathComponent("test2.db").path, passphraseProvider: provider)
+            let db = try AppDatabase(path: FileManager.default.temporaryDirectory.appendingPathComponent("test-\(UUID().uuidString).db").path, passphraseProvider: provider)
             let repo = SQLiteEntryRepository(database: db)
             let resetService = StubDataResetService()
             resetService.error = TestError(message: "Boom")

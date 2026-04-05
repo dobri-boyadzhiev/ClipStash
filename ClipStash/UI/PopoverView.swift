@@ -158,9 +158,9 @@ struct PopoverView: View {
                             selectedEntryId = entry.id
                             Task { _ = await viewModel.copyAsPlainText(entry) }
                         },
-                        onImproveText: { entry in
+                        onImproveText: { entry, mode in
                             selectedEntryId = entry.id
-                            Task { await viewModel.improveText(for: entry) }
+                            Task { await viewModel.improveText(for: entry, promptModeOverride: mode) }
                         },
                         onToggleFavorite: { entry in Task { await viewModel.toggleFavorite(entry) }},
                         onDelete: { entry in Task { await viewModel.delete(entry) }},
@@ -183,9 +183,9 @@ struct PopoverView: View {
                         selectedEntryId = entry.id
                         Task { _ = await viewModel.copyAsPlainText(entry) }
                     },
-                    onImproveText: { entry in
+                    onImproveText: { entry, mode in
                         selectedEntryId = entry.id
-                        Task { await viewModel.improveText(for: entry) }
+                        Task { await viewModel.improveText(for: entry, promptModeOverride: mode) }
                     },
                     onToggleFavorite: { entry in Task { await viewModel.toggleFavorite(entry) }},
                     onDelete: { entry in Task { await viewModel.delete(entry) }},

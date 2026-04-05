@@ -72,6 +72,12 @@ final class OllamaService {
             instructions = "Rewrite the following text to sound professional, polite, and suitable for business communication. IMPORTANT: You must strictly preserve the original language of the text. Do NOT translate it to Russian, English, or any other language. Output ONLY the revised text without any preamble."
         case 2:
             instructions = "\(customPrompt)\n\nOutput ONLY the revised text without any preamble. Preserve the original language."
+        case 3:
+            instructions = "Rewrite the following text so it sounds natural and conversational, as if spoken by a real person. Remove overly formal or bureaucratic phrasing. Keep the meaning intact. IMPORTANT: You must strictly preserve the original language of the text. Do NOT translate it. Output ONLY the revised text without any preamble."
+        case 4:
+            instructions = "Rewrite the following text with a light touch of humor or wit, without changing the core message. Keep it appropriate for informal communication. IMPORTANT: You must strictly preserve the original language of the text. Do NOT translate it. Output ONLY the revised text without any preamble."
+        case 5:
+            instructions = "Rewrite the following text in a concise, direct, executive style. Use short, clear sentences. Remove filler words and unnecessary detail. Suitable for business communication and management summaries. IMPORTANT: You must strictly preserve the original language of the text. Do NOT translate it. Output ONLY the revised text without any preamble."
         default:
             instructions = "Fix all grammar and spelling errors in the following text. Do not change the tone or meaning. IMPORTANT: You must strictly preserve the original language of the text. Do NOT translate it. Output ONLY the corrected text without any preamble."
         }

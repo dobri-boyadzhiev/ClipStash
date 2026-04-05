@@ -93,6 +93,10 @@ struct SettingsContentView: View {
                         Text("Fix Grammar & Spelling").tag(0)
                         Text("Make it Professional").tag(1)
                         Text("Custom Prompt").tag(2)
+                        Divider()
+                        Text("Natural / Conversational").tag(3)
+                        Text("Fun / Witty").tag(4)
+                        Text("Executive / Concise").tag(5)
                     }
 
                     if settings.aiPromptMode == 2 {

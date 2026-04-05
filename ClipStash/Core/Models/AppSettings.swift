@@ -61,7 +61,7 @@ final class AppSettings: ObservableObject {
         get { UserDefaults.standard.object(forKey: "ollamaModel") as? String ?? "llama3.2" }
         set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "ollamaModel") }
     }
-    var aiPromptMode: Int { // 0 = Grammar, 1 = Professional, 2 = Custom
+    var aiPromptMode: Int { // 0 = Grammar, 1 = Professional, 2 = Custom, 3 = Natural, 4 = Fun, 5 = Executive
         get { UserDefaults.standard.object(forKey: "aiPromptMode") as? Int ?? 0 }
         set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "aiPromptMode") }
     }
