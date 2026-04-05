@@ -3,6 +3,7 @@ import Foundation
 struct OllamaRequest: Codable {
     let model: String
     let prompt: String
+    let system: String
     let stream: Bool
     let keep_alive: Int
 }
@@ -43,8 +44,14 @@ final class OllamaService {
             instructions = "Fix all grammar and spelling errors in the following text. Do not change the tone or meaning. Output ONLY the corrected text without any preamble."
         }
 
-        let prompt = "\(instructions)\n\nOriginal Text:\n\(text)"
-        let requestBody = OllamaRequest(model: model, prompt: prompt, stream: false, keep_alive: 300) // Keep alive for 5 minutes
+        let prompt = text
+        let requestBody = OllamaRequest(
+            model: model,
+            prompt: prompt,
+            system: instructions,
+            stream: false,
+            keep_alive: 300
+        ) // Keep alive for 5 minutes
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
