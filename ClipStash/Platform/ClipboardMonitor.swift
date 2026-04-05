@@ -80,17 +80,22 @@ final class ClipboardMonitor: ObservableObject {
         let currentCount = pasteboard.changeCount
         guard currentCount != lastChangeCount else { return }
         lastChangeCount = currentCount
-        
+
         if debounceCount > 0 { debounceCount -= 1; return }
         guard !settings.isPrivateMode else { return }
-        
+
+        let maxEntryBytes = settings.maxEntrySizeMB * 1_048_576
         let sourceBundle = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         let sourceName = NSWorkspace.shared.frontmostApplication?.localizedName
-        
+
         // Priority order: RTF > Text > Image > File URLs
         // (RTF also contains plain text, but we prefer the rich version)
-        
+
         if let rtfData = pasteboard.data(forType: .rtf) {
+            guard rtfData.count <= maxEntryBytes else {
+                logger.info("Skipping RTF clipboard entry: \(rtfData.count) bytes exceeds \(maxEntryBytes) byte limit")
+                return
+            }
             // Note: NSAttributedString RTF parsing runs on main thread.
             // This is acceptable for typical clipboard RTF sizes (< 100KB).
             // For very large RTF documents this could cause brief UI stutter.
@@ -106,10 +111,18 @@ final class ClipboardMonitor: ObservableObject {
                 await entryManager.processNewRTF(plainText: plainText, rtfData: rtfData, source: sourceBundle, sourceName: sourceName)
             }
         } else if let string = pasteboard.string(forType: .string) {
+            guard string.utf8.count <= maxEntryBytes else {
+                logger.info("Skipping text clipboard entry: \(string.utf8.count) bytes exceeds \(maxEntryBytes) byte limit")
+                return
+            }
             Task {
                 await entryManager.processNewText(string, source: sourceBundle, sourceName: sourceName)
             }
         } else if let imgData = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff) {
+            guard imgData.count <= maxEntryBytes else {
+                logger.info("Skipping image clipboard entry: \(imgData.count) bytes exceeds \(maxEntryBytes) byte limit")
+                return
+            }
             Task {
                 await entryManager.processNewImage(imgData, source: sourceBundle, sourceName: sourceName)
             }

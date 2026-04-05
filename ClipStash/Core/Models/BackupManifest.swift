@@ -10,6 +10,7 @@ struct BackupManifest: Codable {
     // User Settings
     let maxItems: Int
     let maxCacheSizeMB: Int
+    let maxEntrySizeMB: Int?
     let stripWhitespace: Bool
     let confirmBeforeClear: Bool
     let windowWidthPercentage: Int
@@ -25,6 +26,7 @@ struct BackupManifest: Codable {
         self.keychainPassphraseBase64 = keychainPassphraseBase64
         self.maxItems = settings.maxItems
         self.maxCacheSizeMB = settings.maxCacheSizeMB
+        self.maxEntrySizeMB = settings.maxEntrySizeMB
         self.stripWhitespace = settings.stripWhitespace
         self.confirmBeforeClear = settings.confirmBeforeClear
         self.windowWidthPercentage = settings.windowWidthPercentage
@@ -39,6 +41,7 @@ struct BackupManifest: Codable {
     func apply(to settings: AppSettings) {
         settings.maxItems = self.maxItems
         settings.maxCacheSizeMB = self.maxCacheSizeMB
+        if let maxEntrySizeMB { settings.maxEntrySizeMB = maxEntrySizeMB }
         settings.stripWhitespace = self.stripWhitespace
         settings.confirmBeforeClear = self.confirmBeforeClear
         settings.windowWidthPercentage = self.windowWidthPercentage

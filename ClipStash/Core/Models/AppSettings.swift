@@ -21,6 +21,10 @@ final class AppSettings: ObservableObject {
         get { UserDefaults.standard.object(forKey: "maxCacheSizeMB") as? Int ?? 10_240 }
         set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "maxCacheSizeMB") }
     }
+    var maxEntrySizeMB: Int {
+        get { UserDefaults.standard.object(forKey: "maxEntrySizeMB") as? Int ?? 50 }
+        set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "maxEntrySizeMB") }
+    }
 
     // Behavior
     var stripWhitespace: Bool {
@@ -86,6 +90,7 @@ final class AppSettings: ObservableObject {
         objectWillChange.send()
         maxItems = 10_000
         maxCacheSizeMB = 10_240
+        maxEntrySizeMB = 50
         stripWhitespace = false
         confirmBeforeClear = true
         launchAtLogin = false

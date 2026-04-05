@@ -846,12 +846,14 @@ struct TestMain {
             let settings = AppSettings.shared
             settings.maxItems = 42
             settings.maxCacheSizeMB = 512
+            settings.maxEntrySizeMB = 10
             settings.windowWidthPercentage = 55
 
             settings.resetToDefaults()
 
             t.checkEqual(settings.maxItems, 10_000)
             t.checkEqual(settings.maxCacheSizeMB, 10_240)
+            t.checkEqual(settings.maxEntrySizeMB, 50)
             t.checkEqual(settings.windowWidthPercentage, 33)
         }
 

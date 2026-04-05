@@ -30,6 +30,7 @@ struct SettingsContentView: View {
             Section("History") {
                 Stepper("Max items: \(settings.maxItems)", value: $settings.maxItems, in: 10...100_000, step: 100)
                 Stepper("Storage limit: \(storageLimitLabel)", value: $settings.maxCacheSizeMB, in: 256...20_480, step: 256)
+                Stepper("Max entry size: \(settings.maxEntrySizeMB) MB", value: $settings.maxEntrySizeMB, in: 1...500, step: 5)
             }
 
             Section("Behavior") {
