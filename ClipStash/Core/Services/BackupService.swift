@@ -239,28 +239,46 @@ final class BackupService: @unchecked Sendable {
             throw BackupError.internalError(error)
         }
 
-        // 4. Success — remove old backups
-        try? fileManager.removeItem(atPath: backupDBPath)
-        try? fileManager.removeItem(atPath: backupDBPath + "-shm")
-        try? fileManager.removeItem(atPath: backupDBPath + "-wal")
-        try? fileManager.removeItem(atPath: backupImagesPath)
-
-        // 5. Update Keychain
+        // 4. Update Keychain BEFORE removing backup files (so rollback is still possible)
         let secretStore = KeychainSecretStore()
         let descriptor = DatabaseSecretDescriptor.clipStashPrimaryDatabase
         try? secretStore.deleteSecret(for: descriptor)
         do {
             try secretStore.storeSecret(keychainSecret, for: descriptor)
         } catch {
+            // Keychain write failed — roll back DB files from backup
+            try? fileManager.removeItem(atPath: targetDBPath)
+            try? fileManager.removeItem(atPath: targetDBPath + "-wal")
+            try? fileManager.removeItem(atPath: targetDBPath + "-shm")
+            try? fileManager.removeItem(atPath: targetImagesPath)
+
+            if fileManager.fileExists(atPath: backupDBPath) {
+                try? fileManager.moveItem(atPath: backupDBPath, toPath: targetDBPath)
+            }
+            if fileManager.fileExists(atPath: backupDBPath + "-wal") {
+                try? fileManager.moveItem(atPath: backupDBPath + "-wal", toPath: targetDBPath + "-wal")
+            }
+            if fileManager.fileExists(atPath: backupDBPath + "-shm") {
+                try? fileManager.moveItem(atPath: backupDBPath + "-shm", toPath: targetDBPath + "-shm")
+            }
+            if fileManager.fileExists(atPath: backupImagesPath) {
+                try? fileManager.moveItem(atPath: backupImagesPath, toPath: targetImagesPath)
+            }
             throw BackupError.keychainAccessFailed
         }
 
-        // 5. Update settings
+        // 5. All committed — safe to remove backup files now
+        try? fileManager.removeItem(atPath: backupDBPath)
+        try? fileManager.removeItem(atPath: backupDBPath + "-shm")
+        try? fileManager.removeItem(atPath: backupDBPath + "-wal")
+        try? fileManager.removeItem(atPath: backupImagesPath)
+
+        // 6. Update settings
         await MainActor.run {
             manifest.apply(to: AppSettings.shared)
         }
 
-        // 6. Request App Restart
+        // 7. Request App Restart
         NotificationCenter.default.post(name: .backupRestoreCompleted, object: nil)
     }
 }

@@ -3,6 +3,7 @@ import OSLog
 
 struct AppDatabaseBootstrap: Sendable {
     let database: AppDatabase
+    let passphraseProvider: any DatabasePassphraseProviding
     let securityStatus: DatabaseSecurityStatus
     let startupAlertMessage: String?
 }
@@ -38,6 +39,7 @@ struct AppDatabaseBootstrapper {
         let database = try AppDatabase(path: databasePath, passphraseProvider: passphraseProvider)
         return AppDatabaseBootstrap(
             database: database,
+            passphraseProvider: passphraseProvider,
             securityStatus: .keychainBacked(
                 databasePath: databasePath,
                 keyStorageDescription: passphraseProvider.keyStorageDescription
@@ -57,6 +59,7 @@ struct AppDatabaseBootstrapper {
             Self.logger.notice("Using temporary encrypted fallback database at \(fallbackDatabasePath, privacy: .public)")
             return AppDatabaseBootstrap(
                 database: fallbackDatabase,
+                passphraseProvider: fallbackProvider,
                 securityStatus: fallbackStatus,
                 startupAlertMessage: fallbackStatus.startupAlertMessage
             )

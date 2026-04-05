@@ -37,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         database = databaseBootstrap.database
         repository = SQLiteEntryRepository(database: database)
-        imageCache = ImageFileCache(passphraseProvider: databasePassphraseProvider)
+        imageCache = ImageFileCache(passphraseProvider: databaseBootstrap.passphraseProvider)
         entryManager = EntryManager(repository: repository, settings: settings, imageCache: imageCache)
         clipboardMonitor = ClipboardMonitor(entryManager: entryManager, settings: settings)
         clipboardWriter = PasteboardClipboardWriter(imageCache: imageCache)

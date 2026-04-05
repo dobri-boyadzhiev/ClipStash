@@ -83,11 +83,16 @@ final class HistoryViewModel: ObservableObject {
     }
     
     func loadNextPage() async {
-        guard hasMore, !isLoading, searchQuery.isEmpty else { return }
+        guard hasMore, !isLoading else { return }
         isLoading = true
 
         do {
-            let fetched = try await repository.fetchHistoryPage(offset: currentOffset, limit: pageSize + 1)
+            let fetched: [ClipboardEntry]
+            if activeSearchCriteria.isEmpty {
+                fetched = try await repository.fetchHistoryPage(offset: currentOffset, limit: pageSize + 1)
+            } else {
+                fetched = try await repository.search(criteria: activeSearchCriteria, offset: currentOffset, limit: pageSize + 1)
+            }
             let newItems = Array(fetched.prefix(pageSize))
             hasMore = fetched.count > pageSize
 
