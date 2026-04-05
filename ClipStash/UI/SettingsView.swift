@@ -8,7 +8,17 @@ struct SettingsView: View {
     var body: some View {
         SettingsContentView(viewModel: viewModel)
             .frame(width: 480, height: 420)
-            .onAppear { Task { await viewModel.loadStats() } }
+            .onAppear {
+                Task {
+                    await viewModel.loadStats()
+                    await viewModel.loadAIModels()
+                }
+            }
+            .onChange(of: viewModel.settings.isAIEnabled) { _, isEnabled in
+                if isEnabled {
+                    Task { await viewModel.loadAIModels() }
+                }
+            }
     }
 }
 
@@ -40,7 +50,35 @@ struct SettingsContentView: View {
 
                 if settings.isAIEnabled {
                     TextField("Host URL", text: $settings.ollamaUrl)
-                    TextField("Model Name", text: $settings.ollamaModel)
+                        .onChange(of: settings.ollamaUrl) { _, _ in
+                            Task { await viewModel.loadAIModels() }
+                        }
+
+                    if viewModel.isFetchingModels {
+                        HStack {
+                            Text("Model Name")
+                            Spacer()
+                            ProgressView().controlSize(.small)
+                        }
+                    } else if viewModel.availableAIModels.isEmpty {
+                        TextField("Model Name", text: $settings.ollamaModel)
+                    } else {
+                        HStack {
+                            Picker("Model Name", selection: $settings.ollamaModel) {
+                                ForEach(viewModel.availableAIModels, id: \.self) { model in
+                                    Text(model).tag(model)
+                                }
+                            }
+                            Button {
+                                Task { await viewModel.loadAIModels() }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Refresh models")
+                        }
+                    }
 
                     Picker("Improvement Mode", selection: $settings.aiPromptMode) {
                         Text("Fix Grammar & Spelling").tag(0)

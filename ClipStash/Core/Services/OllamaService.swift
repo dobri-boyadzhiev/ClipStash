@@ -12,6 +12,14 @@ struct OllamaResponse: Codable {
     let response: String
 }
 
+struct OllamaModelList: Codable {
+    let models: [OllamaModel]
+}
+
+struct OllamaModel: Codable {
+    let name: String
+}
+
 enum OllamaError: LocalizedError {
     case invalidURL
     case invalidResponse
@@ -27,6 +35,29 @@ enum OllamaError: LocalizedError {
 }
 
 final class OllamaService {
+    static func fetchAvailableModels(urlString: String) async throws -> [String] {
+        guard let url = URL(string: "\(urlString)/api/tags") else {
+            throw OllamaError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw OllamaError.invalidResponse
+        }
+
+        if httpResponse.statusCode != 200 {
+            let errorMsg = String(data: data, encoding: .utf8) ?? "Unknown Error"
+            throw OllamaError.apiError("Status \(httpResponse.statusCode): \(errorMsg)")
+        }
+
+        let modelList = try JSONDecoder().decode(OllamaModelList.self, from: data)
+        return modelList.models.map { $0.name }.sorted()
+    }
+
     static func improveText(_ text: String, urlString: String, model: String, promptMode: Int, customPrompt: String) async throws -> String {
         guard let url = URL(string: "\(urlString)/api/generate") else {
             throw OllamaError.invalidURL
