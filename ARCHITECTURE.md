@@ -103,6 +103,10 @@ Singleton (`AppSettings.shared`) using `@AppStorage` for persistence.
 | `confirmBeforeClear` | true | Confirm dialog before clearing |
 | `isPrivateMode` | false | Pause recording |
 | `windowWidthPercentage` | 33 | Panel width (% of screen) |
+| `isAIEnabled` | false | Enable AI Assistant |
+| `ollamaUrl` | `http://localhost:11434` | Ollama server URL |
+| `ollamaModel` | `llama3.2` | Model to use for AI |
+| `aiPromptMode` | 0 | 0=Grammar, 1=Pro, 2=Custom |
 
 ### 2.2 Protocols
 
@@ -181,6 +185,10 @@ Key methods:
 - `delete(_ entry:)` → delete + clean up image cache
 - `clearHistory(keepFavorites:)` → delete all (optionally keep favorites)
 - `reconcileStoredAssets()` → remove orphaned cached image files
+
+#### `OllamaService` (Core/Services/OllamaService.swift)
+
+Handles communication with a local Ollama API to rewrite text using LLMs (e.g., Llama 3, Gemma). Uses the `/api/generate` endpoint with `system` and `prompt` separation to prevent conversational responses. Provides a stateless `improveText` method.
 
 ---
 
@@ -294,6 +302,7 @@ The service:
 Registered shortcuts:
 - `⌃⌘V` — toggle clipboard panel
 - `⌘⇧P` — toggle private mode
+- `⌘⌥I` — Magic Replace with AI
 - `⌘⇧←` / `⌘⇧→` — cycle through recent entries
 
 ### 4.3 `LoginItemHelper` (Platform/LoginItemHelper.swift)
@@ -412,6 +421,17 @@ All objects are created once and live for the app's lifetime.
 4. Repository: FTS5 MATCH "hello*" (prefix search)
 5. Results populate entries array
 6. LazyVStack updates with search results
+```
+
+### Magic Replace Flow (AI)
+
+```
+1. User selects text in any app and presses ⌘⌥I
+2. AppDelegate simulates ⌘C to copy text
+3. Reads text from pasteboard
+4. Calls OllamaService to rewrite the text based on current settings
+5. EntryManager saves new text to history as "✨ AI Assistant"
+6. AppDelegate writes new text to pasteboard and simulates ⌘V
 ```
 
 ---
