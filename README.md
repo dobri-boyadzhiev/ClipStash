@@ -13,6 +13,7 @@ Inspired by the GNOME Clipboard History extension, rebuilt from scratch for macO
 | 🔒 **Private Mode** | Temporarily pauses clipboard recording |
 | 📊 **Source Tracking** | Shows which app each clipboard entry came from |
 | ♻️ **Deduplication** | Same text copied twice? Just moves to top (no duplicates) |
+| 🤖 **AI Assistant** | Use local models via Ollama to instantly improve/rewrite copied text securely |
 | 🧹 **Auto Pruning** | Old entries pruned automatically by count or total size |
 | 🚀 **Launch at Login** | Runs silently in menu bar on startup |
 | ✂️ **Strip Whitespace** | Optional automatic trimming of copied text |
@@ -27,6 +28,7 @@ Inspired by the GNOME Clipboard History extension, rebuilt from scratch for macO
 |----------|--------|
 | `⌃⌘V` | Toggle the clipboard panel open/closed |
 | `⌘⇧P` | Toggle Private Mode on/off |
+| `⌘⌥I` | Magic Replace with AI (Requires Ollama configured in Settings) |
 | `⌘⇧←` | Cycle to previous entry (copies without opening panel) |
 | `⌘⇧→` | Cycle to next entry |
 
