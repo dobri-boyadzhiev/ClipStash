@@ -5,6 +5,7 @@ struct EntryContextMenu: View {
     let entry: ClipboardEntry
     let onSelect: () -> Void
     let onCopyPlainText: (() -> Void)?
+    let onImproveText: (() -> Void)?
     let onToggleFavorite: () -> Void
     let onDelete: () -> Void
     
@@ -31,6 +32,14 @@ struct EntryContextMenu: View {
                 onCopyPlainText()
             } label: {
                 Label("Copy as Plain Text", systemImage: "doc.on.doc")
+            }
+
+            if AppSettings.shared.isAIEnabled {
+                Button {
+                    onImproveText?()
+                } label: {
+                    Label("Improve Text with AI", systemImage: "wand.and.stars")
+                }
             }
 
             Divider()

@@ -123,6 +123,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             Task { @MainActor in await self.cycleToNextEntry() }
         }
+
+        // Cmd+Option+I — Magic Replace with AI
+        hotKeyService.register(
+            keyCode: GlobalHotKeyService.KeyCode.i,
+            modifiers: GlobalHotKeyService.Modifiers.cmdOption
+        ) { [weak self] in
+            guard let self, self.settings.isAIEnabled else { return }
+            Task { @MainActor in await self.performMagicReplace() }
+        }
     }
     
     private func cycleToPreviousEntry() async {
@@ -147,6 +156,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else if let last = entries.last {
             let _ = await historyViewModel.select(last)
         }
+    }
+
+    private func performMagicReplace() async {
+        // Simulate Cmd+C to copy selected text
+        simulateKeystroke(keyCode: 8, modifiers: .maskCommand) // 8 is C
+
+        // Wait for clipboard to update
+        try? await Task.sleep(nanoseconds: 150_000_000) // 150ms
+
+        guard let text = NSPasteboard.general.string(forType: .string) else { return }
+
+        do {
+            let improvedText = try await OllamaService.improveText(
+                text,
+                urlString: self.settings.ollamaUrl,
+                model: self.settings.ollamaModel,
+                promptMode: self.settings.aiPromptMode,
+                customPrompt: self.settings.customAIPrompt
+            )
+
+            // Save to entryManager so it's in history
+            await self.entryManager.processNewText(improvedText, source: "Ollama", sourceName: "✨ AI Assistant")
+
+            // Write to pasteboard
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(improvedText, forType: .string)
+
+            // Wait for pasteboard to update
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+
+            // Simulate Cmd+V to paste
+            simulateKeystroke(keyCode: 9, modifiers: .maskCommand) // 9 is V
+        } catch {
+            print("Magic Replace failed: \(error)")
+        }
+    }
+
+    private func simulateKeystroke(keyCode: CGKeyCode, modifiers: CGEventFlags) {
+        let source = CGEventSource(stateID: .hidSystemState)
+        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true)
+        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
+
+        keyDown?.flags = modifiers
+        keyUp?.flags = modifiers
+
+        keyDown?.post(tap: .cghidEventTap)
+        keyUp?.post(tap: .cghidEventTap)
     }
 
     private func presentStartupAlertIfNeeded() {

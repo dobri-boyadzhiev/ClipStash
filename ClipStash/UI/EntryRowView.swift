@@ -9,6 +9,7 @@ struct EntryRowView: View {
     let isSelected: Bool
     let onSelect: () -> Void
     let onCopyPlainText: (() -> Void)?
+    let onImproveText: (() -> Void)?
     let onToggleFavorite: () -> Void
     let onDelete: () -> Void
     let onHoverImageChanged: (ClipboardEntry?) -> Void
@@ -47,6 +48,16 @@ struct EntryRowView: View {
             // Action buttons (shown on hover)
             if isHovered || isSelected {
                 HStack(spacing: 2) {
+                    if AppSettings.shared.isAIEnabled, entry.type != .image, let onImproveText {
+                        Button(action: onImproveText) {
+                            Image(systemName: "wand.and.stars")
+                                .foregroundStyle(.secondary)
+                                .font(.system(size: 11))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Improve Text with AI")
+                    }
+
                     Button(action: onToggleFavorite) {
                         Image(systemName: entry.isFavorite ? "star.fill" : "star")
                             .foregroundStyle(entry.isFavorite ? .yellow : .secondary)
@@ -80,6 +91,7 @@ struct EntryRowView: View {
                 entry: entry,
                 onSelect: onSelect,
                 onCopyPlainText: onCopyPlainText,
+                onImproveText: onImproveText,
                 onToggleFavorite: onToggleFavorite,
                 onDelete: onDelete
             )

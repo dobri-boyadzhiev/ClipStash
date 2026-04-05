@@ -8,6 +8,7 @@ struct HistoryListView: View {
     let hasMore: Bool
     let onSelect: (ClipboardEntry) -> Void
     let onCopyPlainText: (ClipboardEntry) -> Void
+    let onImproveText: (ClipboardEntry) -> Void
     let onToggleFavorite: (ClipboardEntry) -> Void
     let onDelete: (ClipboardEntry) -> Void
     let onHoverImageChanged: (ClipboardEntry?) -> Void
@@ -36,6 +37,7 @@ struct HistoryListView: View {
                                 isSelected: selectedId == entry.id,
                                 onSelect: { onSelect(entry) },
                                 onCopyPlainText: { onCopyPlainText(entry) },
+                                onImproveText: { onImproveText(entry) },
                                 onToggleFavorite: { onToggleFavorite(entry) },
                                 onDelete: { onDelete(entry) },
                                 onHoverImageChanged: onHoverImageChanged

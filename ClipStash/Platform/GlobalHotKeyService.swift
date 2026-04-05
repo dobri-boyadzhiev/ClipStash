@@ -89,6 +89,7 @@ final class GlobalHotKeyService {
     
     // MARK: - Common key codes (Carbon virtual key codes)
     enum KeyCode {
+        static let i: UInt32 = 34
         static let v: UInt32 = 9
         static let p: UInt32 = 35
         static let c: UInt32 = 8
@@ -106,6 +107,7 @@ final class GlobalHotKeyService {
         static let control: UInt32 = UInt32(controlKey)
         static let cmdShift: UInt32 = cmd | shift
         static let cmdControl: UInt32 = cmd | control
+        static let cmdOption: UInt32 = cmd | option
     }
 }
 

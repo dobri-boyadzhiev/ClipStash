@@ -46,6 +46,28 @@ final class AppSettings: ObservableObject {
         get { UserDefaults.standard.object(forKey: "isPrivateMode") as? Bool ?? false }
         set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "isPrivateMode") }
     }
+
+    // AI Assistant
+    var isAIEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: "isAIEnabled") as? Bool ?? false }
+        set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "isAIEnabled") }
+    }
+    var ollamaUrl: String {
+        get { UserDefaults.standard.object(forKey: "ollamaUrl") as? String ?? "http://localhost:11434" }
+        set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "ollamaUrl") }
+    }
+    var ollamaModel: String {
+        get { UserDefaults.standard.object(forKey: "ollamaModel") as? String ?? "llama3.2" }
+        set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "ollamaModel") }
+    }
+    var aiPromptMode: Int { // 0 = Grammar, 1 = Professional, 2 = Custom
+        get { UserDefaults.standard.object(forKey: "aiPromptMode") as? Int ?? 0 }
+        set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "aiPromptMode") }
+    }
+    var customAIPrompt: String {
+        get { UserDefaults.standard.object(forKey: "customAIPrompt") as? String ?? "" }
+        set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "customAIPrompt") }
+    }
     
     @MainActor
     func setPrivateMode(_ isEnabled: Bool) {
@@ -68,6 +90,11 @@ final class AppSettings: ObservableObject {
         launchAtLogin = false
         windowWidthPercentage = 33
         isPrivateMode = false
+        isAIEnabled = false
+        ollamaUrl = "http://localhost:11434"
+        ollamaModel = "llama3.2"
+        aiPromptMode = 0
+        customAIPrompt = ""
     }
 
     private init() {

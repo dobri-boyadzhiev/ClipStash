@@ -35,6 +35,32 @@ struct SettingsContentView: View {
                 Toggle("Confirm before clearing", isOn: $settings.confirmBeforeClear)
             }
 
+            Section("AI Assistant (Ollama)") {
+                Toggle("Enable AI Assistant", isOn: $settings.isAIEnabled)
+
+                if settings.isAIEnabled {
+                    TextField("Host URL", text: $settings.ollamaUrl)
+                    TextField("Model Name", text: $settings.ollamaModel)
+
+                    Picker("Improvement Mode", selection: $settings.aiPromptMode) {
+                        Text("Fix Grammar & Spelling").tag(0)
+                        Text("Make it Professional").tag(1)
+                        Text("Custom Prompt").tag(2)
+                    }
+
+                    if settings.aiPromptMode == 2 {
+                        VStack(alignment: .leading) {
+                            Text("Custom Instructions:")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            TextEditor(text: $settings.customAIPrompt)
+                                .frame(height: 60)
+                                .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.secondary.opacity(0.2)))
+                        }
+                    }
+                }
+            }
+
             Section("System") {
                 LaunchAtLoginToggle()
             }

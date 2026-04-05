@@ -151,7 +151,41 @@ final class HistoryViewModel: ObservableObject {
     }
     
     // MARK: - Actions
-    
+
+    func improveText(for entry: ClipboardEntry) async {
+        guard let text = entry.textContent else { return }
+
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            let improvedText = try await OllamaService.improveText(
+                text,
+                urlString: settings.ollamaUrl,
+                model: settings.ollamaModel,
+                promptMode: settings.aiPromptMode,
+                customPrompt: settings.customAIPrompt
+            )
+
+            await entryManager.processNewText(
+                improvedText,
+                source: "Ollama",
+                sourceName: "✨ AI Assistant"
+            )
+
+            DispatchQueue.main.async {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(improvedText, forType: .string)
+            }
+
+            await loadInitial()
+        } catch {
+            reportError(error, fallbackMessage: "Failed to improve text with AI.")
+        }
+
+        isLoading = false
+    }
+
     func select(_ entry: ClipboardEntry) async -> Bool {
         do {
             clipboardMonitor.beginDebounce()
