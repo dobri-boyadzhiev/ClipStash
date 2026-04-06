@@ -106,7 +106,7 @@ Singleton (`AppSettings.shared`) using `@AppStorage` for persistence.
 | `isAIEnabled` | false | Enable AI Assistant |
 | `ollamaUrl` | `http://localhost:11434` | Ollama server URL |
 | `ollamaModel` | `llama3.2` | Model to use for AI |
-| `aiPromptMode` | 0 | 0=Grammar, 1=Pro, 2=Custom |
+| `aiPromptMode` | 0 | 0=Grammar, 1=Professional, 2=Custom, 3=Natural, 4=Fun, 5=Executive |
 
 
 #### `BackupManifest` (Core/Models/BackupManifest.swift)
@@ -198,8 +198,8 @@ Handles communication with a local Ollama API to rewrite text using LLMs (e.g., 
 #### `BackupService` (Core/Services/BackupService.swift)
 
 Handles creating and extracting encrypted `.clipstash_backup` archives.
-- **Export**: Uses GRDB's concurrent backup API (`dbPool.backup()`) to copy the database, zips it along with the image cache and manifest, and encrypts the ZIP using `CryptoKit` (AES-GCM with HKDF-SHA256 key derivation from the user's password).
-- **Import**: Decrypts the archive using the provided password, verifies contents, hot-swaps the database and image cache directory, updates the Keychain secret, and triggers an app restart.
+- **Export**: Uses GRDB's concurrent backup API (`dbPool.backup()`) to copy the database, zips it along with the image cache and manifest, and encrypts the ZIP using `CryptoKit` (AES-GCM with PBKDF2-SHA256 key derivation, 600k iterations, from the user's password). The v2 file format includes a `"CSB"` magic header with embedded iteration count for forward compatibility.
+- **Import**: Auto-detects the backup file format (v2 PBKDF2 or legacy v1 HKDF), decrypts the archive, performs a preflight database validation (integrity check + read test) before committing, hot-swaps the database and image cache directory, atomically updates the Keychain secret (preserving the previous key for rollback on failure), and triggers an app restart.
 
 ---
 
@@ -367,7 +367,7 @@ All views are SwiftUI. The menu bar presence is managed by `NSStatusItem` + `NSP
 | `SearchBarView` | Text field with magnifying glass and clear button |
 | `FavoritesView` | Collapsible section with star icon header |
 | `SettingsView` | Inline settings content shown inside the panel, plus fallback Settings scene |
-| `EntryContextMenu` | Right-click menu: Copy and Close, Favorite, Copy Text, Delete |
+| `EntryContextMenu` | Right-click menu: Copy and Close, Favorite, Copy Text, AI submenu (per-mode), Delete |
 | `MenuBarIcon` | SF Symbols icon generator for the status item |
 
 ---

@@ -48,6 +48,16 @@ struct EntryRowView: View {
             // Action buttons (shown on hover)
             if isHovered || isSelected {
                 HStack(spacing: 2) {
+                    if entry.textContent != nil, entry.type != .image, let onCopyPlainText {
+                        Button(action: onCopyPlainText) {
+                            Image(systemName: "doc.on.doc")
+                                .foregroundStyle(.secondary)
+                                .font(.system(size: 11))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Copy as Plain Text")
+                    }
+
                     if AppSettings.shared.isAIEnabled, entry.type != .image, let onImproveText {
                         Button { onImproveText(nil) } label: {
                             Image(systemName: "wand.and.stars")
