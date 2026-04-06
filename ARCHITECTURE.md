@@ -101,6 +101,7 @@ Singleton (`AppSettings.shared`) using `@AppStorage` for persistence.
 | `maxCacheSizeMB` | 10240 | Max total size in MB |
 | `stripWhitespace` | false | Auto-trim copied text |
 | `confirmBeforeClear` | true | Confirm dialog before clearing |
+| `pasteOnSelection` | false | Auto-paste entry to active app upon selection |
 | `isPrivateMode` | false | Pause recording |
 | `windowWidthPercentage` | 33 | Panel width (% of screen) |
 | `isAIEnabled` | false | Enable AI Assistant |
@@ -316,7 +317,11 @@ Registered shortcuts:
 - `⌘⌥I` — Magic Replace with AI
 - `⌘⇧←` / `⌘⇧→` — cycle through recent entries
 
-### 4.3 `LoginItemHelper` (Platform/LoginItemHelper.swift)
+### 4.3 `KeystrokeSimulator` (Platform/KeystrokeSimulator.swift)
+
+Utility for simulating global keyboard events using Carbon `CGEvent`. Used to auto-paste (`⌘V`) the selected item and perform Magic Replace (`⌘C` then `⌘V`). It also verifies macOS Accessibility permissions required for `CGEvent` posting.
+
+### 4.4 `LoginItemHelper` (Platform/LoginItemHelper.swift)
 
 Wraps LaunchAtLogin library's `LaunchAtLogin.Toggle` SwiftUI view.
 Uses `SMAppService` under the hood (macOS 13+ modern API).
@@ -419,8 +424,9 @@ All objects are created once and live for the app's lifetime.
 2. EntryRowView.onTapGesture → HistoryViewModel.select(entry)
 3. ViewModel: clipboardMonitor.beginDebounce() (prevent re-capture)
 4. ViewModel: NSPasteboard.setString(text)
-5. PopoverView closes the panel window
+5. PopoverView invokes closure to close the panel window
 6. EntryManager: moveToTop(id) + updateUseCount(id)
+7. StatusItemController wait 150ms and simulates ⌘V (if pasteOnSelection is enabled)
 ```
 
 ### Search Flow

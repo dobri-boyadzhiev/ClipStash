@@ -18,7 +18,7 @@ Inspired by the GNOME Clipboard History extension, rebuilt from scratch for macO
 | 🧹 **Auto Pruning** | Old entries pruned automatically by count or total size |
 | 🚀 **Launch at Login** | Runs silently in menu bar on startup |
 | ✂️ **Strip Whitespace** | Optional automatic trimming of copied text |
-| 📐 **Click to Copy** | Select entry → copy the chosen item to the clipboard and close the panel |
+| 📐 **Click to Copy & Auto-Paste** | Select entry → copy the item and optionally auto-paste it directly to your active app |
 | 🔐 **Encrypted Database** | SQLCipher protects the local clipboard database at rest |
 
 ## Keyboard Shortcuts
@@ -49,12 +49,15 @@ Inspired by the GNOME Clipboard History extension, rebuilt from scratch for macO
 ### From DMG
 
 ```bash
-# Build the DMG
+# Build the DMG (auto-increments the patch version)
 cd ClipStash
-bash scripts/build.sh 1.0.22
+bash scripts/build.sh
+
+# Or build a specific version:
+# bash scripts/build.sh 3.2.0
 
 # Install
-open /tmp/ClipStash-1.0.22.dmg
+open releases/ClipStash-*.dmg
 # → Drag ClipStash.app to Applications
 ```
 
