@@ -5,10 +5,60 @@ APP_NAME="ClipStash"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 RELEASES_DIR="${PROJECT_ROOT}/releases"
-VERSION="${1:-3.1.5}"
-CONFIG="${2:-debug}"
 SCRATCH_PATH="/tmp/clipstash-build"
 CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-}"
+
+# --- Version resolution ---
+# Usage:
+#   ./build.sh              → auto-increment patch (3.1.5 → 3.1.6)
+#   ./build.sh --minor      → auto-increment minor (3.1.5 → 3.2.0)
+#   ./build.sh --major      → auto-increment major (3.1.5 → 4.0.0)
+#   ./build.sh 3.2.0        → explicit version
+#   ./build.sh 3.2.0 release → explicit version + release config
+
+get_latest_version() {
+    ls "${RELEASES_DIR}"/${APP_NAME}-*.dmg 2>/dev/null \
+        | sed "s|.*${APP_NAME}-||;s|\.dmg||" \
+        | sort -t. -k1,1n -k2,2n -k3,3n \
+        | tail -1
+}
+
+bump_version() {
+    local ver="$1" part="$2"
+    local major minor patch
+    IFS='.' read -r major minor patch <<< "${ver}"
+    case "${part}" in
+        major) echo "$((major + 1)).0.0" ;;
+        minor) echo "${major}.$((minor + 1)).0" ;;
+        patch) echo "${major}.${minor}.$((patch + 1))" ;;
+    esac
+}
+
+BUMP_MODE=""
+EXPLICIT_VERSION=""
+CONFIG="debug"
+
+for arg in "$@"; do
+    case "${arg}" in
+        --patch)  BUMP_MODE="patch" ;;
+        --minor)  BUMP_MODE="minor" ;;
+        --major)  BUMP_MODE="major" ;;
+        release|debug) CONFIG="${arg}" ;;
+        [0-9]*) EXPLICIT_VERSION="${arg}" ;;
+    esac
+done
+
+if [ -n "${EXPLICIT_VERSION}" ]; then
+    VERSION="${EXPLICIT_VERSION}"
+else
+    LATEST=$(get_latest_version)
+    if [ -z "${LATEST}" ]; then
+        LATEST="0.0.0"
+    fi
+    BUMP_MODE="${BUMP_MODE:-patch}"
+    VERSION=$(bump_version "${LATEST}" "${BUMP_MODE}")
+fi
+
 BUILD_DIR="${SCRATCH_PATH}/arm64-apple-macosx/${CONFIG}"
 
 echo "🔨 Building ${APP_NAME} v${VERSION} (${CONFIG})..."

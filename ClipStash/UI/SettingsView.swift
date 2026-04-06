@@ -36,6 +36,17 @@ struct SettingsContentView: View {
             Section("Behavior") {
                 Toggle("Strip whitespace", isOn: $settings.stripWhitespace)
                 Toggle("Confirm before clearing", isOn: $settings.confirmBeforeClear)
+                Toggle("Paste automatically on selection", isOn: $settings.pasteOnSelection)
+                    .onChange(of: settings.pasteOnSelection) { _, isEnabled in
+                        if isEnabled {
+                            KeystrokeSimulator.checkAccessibility(promptIfNeeded: true)
+                        }
+                    }
+                if settings.pasteOnSelection {
+                    Text("Note: If you just granted Accessibility permissions, you must restart ClipStash.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
 
             Section("AI Assistant (Ollama)") {

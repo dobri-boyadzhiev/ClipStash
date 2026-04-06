@@ -46,6 +46,12 @@ final class AppSettings: ObservableObject {
         set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "windowWidthPercentage") }
     }
 
+    // Behavior
+    var pasteOnSelection: Bool {
+        get { UserDefaults.standard.object(forKey: "pasteOnSelection") as? Bool ?? false }
+        set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: "pasteOnSelection") }
+    }
+
     // Privacy
     var isPrivateMode: Bool {
         get { UserDefaults.standard.object(forKey: "isPrivateMode") as? Bool ?? false }
@@ -95,6 +101,7 @@ final class AppSettings: ObservableObject {
         confirmBeforeClear = true
         launchAtLogin = false
         windowWidthPercentage = 33
+        pasteOnSelection = false
         isPrivateMode = false
         isAIEnabled = false
         ollamaUrl = "http://localhost:11434"

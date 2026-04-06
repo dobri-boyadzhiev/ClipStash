@@ -13,6 +13,7 @@ struct BackupManifest: Codable {
     let maxEntrySizeMB: Int?
     let stripWhitespace: Bool
     let confirmBeforeClear: Bool
+    let pasteOnSelection: Bool?
     let windowWidthPercentage: Int
     let isAIEnabled: Bool
     let ollamaUrl: String
@@ -29,6 +30,7 @@ struct BackupManifest: Codable {
         self.maxEntrySizeMB = settings.maxEntrySizeMB
         self.stripWhitespace = settings.stripWhitespace
         self.confirmBeforeClear = settings.confirmBeforeClear
+        self.pasteOnSelection = settings.pasteOnSelection
         self.windowWidthPercentage = settings.windowWidthPercentage
         self.isAIEnabled = settings.isAIEnabled
         self.ollamaUrl = settings.ollamaUrl
@@ -44,6 +46,7 @@ struct BackupManifest: Codable {
         if let maxEntrySizeMB { settings.maxEntrySizeMB = maxEntrySizeMB }
         settings.stripWhitespace = self.stripWhitespace
         settings.confirmBeforeClear = self.confirmBeforeClear
+        if let pasteOnSelection { settings.pasteOnSelection = pasteOnSelection }
         settings.windowWidthPercentage = self.windowWidthPercentage
         settings.isAIEnabled = self.isAIEnabled
         settings.ollamaUrl = self.ollamaUrl

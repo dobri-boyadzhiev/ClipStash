@@ -15,6 +15,8 @@ final class StatusItemController {
     private var cancellables = Set<AnyCancellable>()
     private var loadTask: Task<Void, Never>?
 
+    private var previousApp: NSRunningApplication?
+
     init(
         settings: AppSettings,
         imageCache: ImageCacheProtocol,
@@ -41,6 +43,13 @@ final class StatusItemController {
     func showPopover() {
         guard let button = statusItem.button else { return }
 
+        // Remember the previously active app so we can restore focus after paste.
+        // Filter out ClipStash itself in case macOS activated it before this ran.
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        if frontmost?.bundleIdentifier != Bundle.main.bundleIdentifier {
+            previousApp = frontmost
+        }
+
         popoverState.showHistory()
         loadTask?.cancel()
         loadTask = Task { @MainActor in
@@ -62,6 +71,29 @@ final class StatusItemController {
         popover.performClose(nil)
     }
 
+    func closePopoverAndPaste() {
+        let appToRestore = previousApp
+        closePopover()
+
+        // Give focus back to the target application
+        if let app = appToRestore {
+            if #available(macOS 14.0, *) {
+                app.activate()
+            } else {
+                app.activate(options: .activateIgnoringOtherApps)
+            }
+        } else {
+            NSApp.hide(nil)
+        }
+
+        // Wait a short moment for the popover to hide and focus to stabilize
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            Task {
+                await KeystrokeSimulator.simulatePaste()
+            }
+        }
+    }
+
     private func configurePopover() {
         popover.behavior = .transient
         popover.animates = true
@@ -73,6 +105,7 @@ final class StatusItemController {
                 popoverState: popoverState,
                 imageCache: imageCache,
                 onClosePopover: { [weak self] in self?.closePopover() },
+                onCloseAndPaste: { [weak self] in self?.closePopoverAndPaste() }
             )
         )
     }

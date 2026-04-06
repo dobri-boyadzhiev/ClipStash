@@ -45,6 +45,7 @@ struct PopoverView: View {
     let imageCache: ImageCacheProtocol
     @ObservedObject private var settings = AppSettings.shared
     let onClosePopover: () -> Void
+    var onCloseAndPaste: (() -> Void)? = nil
     @FocusState private var isSearchFocused: Bool
     @State private var selectedEntryId: Int64?
     @State private var hoveredImageEntry: ClipboardEntry?
@@ -274,7 +275,12 @@ struct PopoverView: View {
         hoveredImageEntry = nil
         let didCopy = await viewModel.select(entry)
         guard didCopy else { return }
-        onClosePopover()
+
+        if settings.pasteOnSelection, let onCloseAndPaste = onCloseAndPaste {
+            onCloseAndPaste()
+        } else {
+            onClosePopover()
+        }
     }
 
     private var hoverPreviewWidth: CGFloat {
