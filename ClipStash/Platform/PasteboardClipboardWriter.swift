@@ -1,8 +1,18 @@
 import AppKit
 
+extension NSPasteboard.PasteboardType {
+    /// Holds the bundle identifier of the app that wrote the contents (https://nspasteboard.org).
+    static let nspasteboardSource = NSPasteboard.PasteboardType("org.nspasteboard.source")
+}
+
 /// Restores persisted clipboard entries back into the system pasteboard.
+///
+/// Every write is tagged with `org.nspasteboard.source` = `sourceIdentifier`, which is how
+/// `ClipboardMonitor` tells ClipStash's own writes apart from real copies.
 @MainActor
 final class PasteboardClipboardWriter: ClipboardWriting, @unchecked Sendable {
+    nonisolated static let sourceIdentifier = Bundle.main.bundleIdentifier ?? "com.clipstash.app"
+
     private let pasteboard: NSPasteboard
     private let imageCache: ImageCacheProtocol
 
@@ -59,11 +69,12 @@ final class PasteboardClipboardWriter: ClipboardWriting, @unchecked Sendable {
         try writeText(text)
     }
 
-    private func writeText(_ text: String) throws {
+    func writeText(_ text: String) throws {
         pasteboard.clearContents()
         guard pasteboard.setString(text, forType: .string) else {
             throw ClipboardWriteError.failedToWrite("text")
         }
+        markAsOwnWrite()
     }
 
     private func writeRTF(_ data: Data, plainText: String?) throws {
@@ -81,6 +92,7 @@ final class PasteboardClipboardWriter: ClipboardWriting, @unchecked Sendable {
         if !didWrite {
             throw ClipboardWriteError.failedToWrite("RTF content")
         }
+        markAsOwnWrite()
     }
 
     private func writeImage(_ data: Data) throws {
@@ -92,6 +104,7 @@ final class PasteboardClipboardWriter: ClipboardWriting, @unchecked Sendable {
         guard pasteboard.writeObjects([image]) else {
             throw ClipboardWriteError.failedToWrite("image")
         }
+        markAsOwnWrite()
     }
 
     private func writeFileURLs(_ urls: [URL]) throws {
@@ -99,6 +112,12 @@ final class PasteboardClipboardWriter: ClipboardWriting, @unchecked Sendable {
         guard pasteboard.writeObjects(urls as [NSURL]) else {
             throw ClipboardWriteError.failedToWrite("file URLs")
         }
+        markAsOwnWrite()
+    }
+
+    /// Adds the source tag to the contents just written (to the first pasteboard item).
+    private func markAsOwnWrite() {
+        pasteboard.setString(Self.sourceIdentifier, forType: .nspasteboardSource)
     }
 }
 

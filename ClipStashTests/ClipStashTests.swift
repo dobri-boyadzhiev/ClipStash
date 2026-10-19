@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import GRDB
 @testable import ClipStashLib
@@ -55,6 +56,7 @@ final class TestRunner {
 final class MockClipboardWriter: ClipboardWriting, @unchecked Sendable {
     private(set) var writtenEntries: [ClipboardEntry] = []
     private(set) var plainTextEntries: [ClipboardEntry] = []
+    private(set) var writtenTexts: [String] = []
 
     func write(_ entry: ClipboardEntry) throws {
         writtenEntries.append(entry)
@@ -62,6 +64,10 @@ final class MockClipboardWriter: ClipboardWriting, @unchecked Sendable {
 
     func writePlainText(_ entry: ClipboardEntry) throws {
         plainTextEntries.append(entry)
+    }
+
+    func writeText(_ text: String) throws {
+        writtenTexts.append(text)
     }
 }
 
@@ -133,6 +139,74 @@ final class InMemorySecretStore: DatabaseSecretStoring, @unchecked Sendable {
     private func key(for descriptor: DatabaseSecretDescriptor) -> String {
         "\(descriptor.service)|\(descriptor.account)"
     }
+}
+
+/// A ClipboardMonitor and PasteboardClipboardWriter on a private named pasteboard, so the
+/// tests never touch the user's real clipboard.
+@MainActor
+struct MonitorFixture {
+    let repository: SQLiteEntryRepository
+    let pasteboard: NSPasteboard
+    let monitor: ClipboardMonitor
+    let writer: PasteboardClipboardWriter
+    let imageCache = SpyImageCache()
+
+    init() throws {
+        let settings = AppSettings.shared
+        settings.isPrivateMode = false
+        repository = SQLiteEntryRepository(database: try AppDatabase.inMemory())
+        pasteboard = NSPasteboard(name: NSPasteboard.Name("ClipStashTests-\(UUID().uuidString)"))
+        monitor = ClipboardMonitor(
+            entryManager: EntryManager(repository: repository, settings: settings),
+            settings: settings,
+            pasteboard: pasteboard
+        )
+        writer = PasteboardClipboardWriter(pasteboard: pasteboard, imageCache: imageCache)
+    }
+
+    /// Simulates another app copying `text`, optionally adding marker types.
+    func copyFromOtherApp(_ text: String, markers: [NSPasteboard.PasteboardType] = []) {
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        for marker in markers {
+            pasteboard.setData(Data(), forType: marker)
+        }
+    }
+
+    func recordedTexts() async throws -> Set<String> {
+        Set(try await repository.fetchPage(offset: 0, limit: 50).compactMap(\.textContent))
+    }
+
+    func tearDown() {
+        pasteboard.releaseGlobally()
+    }
+}
+
+/// Whether `work` finishes within `timeout`. If it does not, it is left running.
+@MainActor
+func completes(within timeout: Duration, _ work: @escaping @MainActor @Sendable () async -> Void) async -> Bool {
+    let (results, continuation) = AsyncStream.makeStream(of: Bool.self)
+    Task { @MainActor in
+        await work()
+        continuation.yield(true)
+    }
+    Task {
+        try? await Task.sleep(for: timeout)
+        continuation.yield(false)
+    }
+    for await finished in results {
+        continuation.finish()
+        return finished
+    }
+    return false
+}
+
+func makePNGData() -> Data {
+    let bitmap = NSBitmapImageRep(
+        bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 2, bitsPerSample: 8, samplesPerPixel: 4,
+        hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+    )!
+    return bitmap.representation(using: .png, properties: [:])!
 }
 
 // MARK: - Main Entry Point
@@ -478,6 +552,80 @@ struct TestMain {
             t.checkEqual(bootstrap.securityStatus.activeDatabasePath, fallbackURL.path)
             try bootstrap.database.close()
         }
+
+        await t.run("Primary bootstrap uses the persistent image directory") {
+            let tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent("clipstash-bootstrap-images-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: tempRoot) }
+
+            let databaseURL = tempRoot.appendingPathComponent("clipboard.db")
+            let imagesURL = tempRoot.appendingPathComponent("images", isDirectory: true)
+            let bootstrap = AppDatabaseBootstrapper(
+                databasePath: databaseURL.path,
+                passphraseProvider: KeychainDatabasePassphraseProvider(databaseURL: databaseURL, secretStore: InMemorySecretStore()),
+                imageCacheDirectoryURL: imagesURL,
+                fallbackDatabasePath: tempRoot.appendingPathComponent("fallback.db").path
+            ).bootstrap()
+
+            t.check(!bootstrap.securityStatus.isFallback, "A fresh database with a working key store should open normally")
+            t.checkEqual(bootstrap.imageCacheDirectoryURL.path, imagesURL.path)
+            try bootstrap.database.close()
+        }
+
+        await t.run("Fallback bootstrap never cleans the persistent image directory") {
+            let tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent("clipstash-fallback-images-\(UUID().uuidString)", isDirectory: true)
+            let imagesURL = tempRoot.appendingPathComponent("images", isDirectory: true)
+            try FileManager.default.createDirectory(at: imagesURL, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: tempRoot) }
+
+            let storedImageURL = imagesURL.appendingPathComponent("stored-image-hash")
+            try Data([1, 2, 3]).write(to: storedImageURL)
+
+            // An existing database whose key is unavailable forces the fallback path.
+            let databaseURL = tempRoot.appendingPathComponent("clipboard.db")
+            try Data([0x53, 0x51, 0x4c, 0x69]).write(to: databaseURL)
+            let fallbackURL = tempRoot.appendingPathComponent("fallback.db")
+            let bootstrap = AppDatabaseBootstrapper(
+                databasePath: databaseURL.path,
+                passphraseProvider: KeychainDatabasePassphraseProvider(databaseURL: databaseURL, secretStore: InMemorySecretStore()),
+                imageCacheDirectoryURL: imagesURL,
+                fallbackDatabasePath: fallbackURL.path
+            ).bootstrap()
+
+            t.check(bootstrap.securityStatus.isFallback, "Missing key should trigger fallback")
+            t.checkEqual(bootstrap.imageCacheDirectoryURL.path, tempRoot.appendingPathComponent("fallback_images").path)
+
+            let fallbackCache = ImageFileCache(
+                directoryURL: bootstrap.imageCacheDirectoryURL,
+                passphraseProvider: bootstrap.passphraseProvider
+            )
+            let entryManager = EntryManager(
+                repository: SQLiteEntryRepository(database: bootstrap.database),
+                settings: AppSettings.shared,
+                imageCache: fallbackCache
+            )
+            await entryManager.reconcileStoredAssets()
+
+            t.check(FileManager.default.fileExists(atPath: storedImageURL.path), "Reconciling the empty fallback database must not delete persistent images")
+            try bootstrap.database.close()
+        }
+
+        await t.run("Image cache encrypts files in the directory it is given") {
+            let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent("clipstash-image-cache-\(UUID().uuidString)", isDirectory: true)
+            defer { try? FileManager.default.removeItem(at: directoryURL) }
+
+            let cache = ImageFileCache(directoryURL: directoryURL, passphraseProvider: try EphemeralDatabasePassphraseProvider())
+            let payload = makePNGData()
+            await cache.save(data: payload, forHash: "image-hash")
+
+            let fileURL = directoryURL.appendingPathComponent("image-hash")
+            t.check(FileManager.default.fileExists(atPath: fileURL.path), "Image should be stored in the injected directory")
+            t.check(try Data(contentsOf: fileURL) != payload, "Image should be encrypted at rest")
+            t.checkEqual(await cache.load(forHash: "image-hash"), payload)
+
+            await cache.cleanOrphans(validHashes: [])
+            t.check(!FileManager.default.fileExists(atPath: fileURL.path), "Orphan cleanup should remove unreferenced files")
+        }
         
         await t.run("Clear keeps favorites") {
             let db = try AppDatabase.inMemory()
@@ -670,12 +818,10 @@ struct TestMain {
             let settings = AppSettings.shared
             let imageCache = SpyImageCache()
             let entryManager = EntryManager(repository: repo, settings: settings, imageCache: imageCache)
-            let monitor = ClipboardMonitor(entryManager: entryManager, settings: settings)
             let writer = MockClipboardWriter()
             let viewModel = HistoryViewModel(
                 repository: repo,
                 entryManager: entryManager,
-                clipboardMonitor: monitor,
                 clipboardWriter: writer,
                 settings: settings
             )
@@ -703,12 +849,10 @@ struct TestMain {
             let settings = AppSettings.shared
             let imageCache = SpyImageCache()
             let entryManager = EntryManager(repository: repo, settings: settings, imageCache: imageCache)
-            let monitor = ClipboardMonitor(entryManager: entryManager, settings: settings)
             let writer = MockClipboardWriter()
             let viewModel = HistoryViewModel(
                 repository: repo,
                 entryManager: entryManager,
-                clipboardMonitor: monitor,
                 clipboardWriter: writer,
                 settings: settings
             )
@@ -725,6 +869,57 @@ struct TestMain {
             t.check(firstPageIDs.isSubset(of: Set(viewModel.entries.compactMap(\.id))), "Loading next page should preserve the first page entries")
         }
 
+        await t.run("Queries that parse to empty criteria show the history instead of looping") {
+            let db = try AppDatabase.inMemory()
+            let repo = SQLiteEntryRepository(database: db)
+            var favorite = ClipboardEntry.text("Favorite")
+            var regular = ClipboardEntry.text("Regular")
+            try await repo.save(&favorite)
+            try await repo.save(&regular)
+            let _ = try await repo.toggleFavorite(id: favorite.id!)
+
+            let settings = AppSettings.shared
+            let entryManager = EntryManager(repository: repo, settings: settings, imageCache: SpyImageCache())
+            let viewModel = HistoryViewModel(
+                repository: repo,
+                entryManager: entryManager,
+                clipboardWriter: MockClipboardWriter(),
+                settings: settings
+            )
+
+            for query in ["\"", "-", "- -", "-fav"] {
+                viewModel.searchQuery = query
+                let finished = await completes(within: .seconds(2)) { await viewModel.loadInitial() }
+                t.check(finished, "loadInitial should finish for query \(query)")
+                t.check(viewModel.activeSearchCriteria.isEmpty, "Query \(query) should parse to empty criteria")
+                t.checkEqual(viewModel.entries.compactMap(\.textContent), ["Regular"], "Query \(query) should show the history")
+                t.checkEqual(viewModel.favorites.count, 1, "Query \(query) should keep favorites visible")
+            }
+        }
+
+        await t.run("Typing a query that parses to empty criteria shows the history") {
+            let db = try AppDatabase.inMemory()
+            let repo = SQLiteEntryRepository(database: db)
+            var entry = ClipboardEntry.text("Regular")
+            try await repo.save(&entry)
+
+            let settings = AppSettings.shared
+            let entryManager = EntryManager(repository: repo, settings: settings, imageCache: SpyImageCache())
+            let viewModel = HistoryViewModel(
+                repository: repo,
+                entryManager: entryManager,
+                clipboardWriter: MockClipboardWriter(),
+                settings: settings
+            )
+
+            // Goes through the debounced search pipeline rather than loadInitial.
+            viewModel.searchQuery = "-fav"
+            try await Task.sleep(for: .milliseconds(600))
+
+            t.checkEqual(viewModel.entries.compactMap(\.textContent), ["Regular"])
+            t.check(!viewModel.isLoading, "Search should have finished")
+        }
+
         await t.run("Selection uses clipboard writer") {
             let db = try AppDatabase.inMemory()
             let repo = SQLiteEntryRepository(database: db)
@@ -735,12 +930,10 @@ struct TestMain {
 
             let imageCache = SpyImageCache()
             let entryManager = EntryManager(repository: repo, settings: settings, imageCache: imageCache)
-            let monitor = ClipboardMonitor(entryManager: entryManager, settings: settings)
             let writer = MockClipboardWriter()
             let viewModel = HistoryViewModel(
                 repository: repo,
                 entryManager: entryManager,
-                clipboardMonitor: monitor,
                 clipboardWriter: writer,
                 settings: settings
             )
@@ -761,12 +954,10 @@ struct TestMain {
             let settings = AppSettings.shared
             let imageCache = SpyImageCache()
             let entryManager = EntryManager(repository: repo, settings: settings, imageCache: imageCache)
-            let monitor = ClipboardMonitor(entryManager: entryManager, settings: settings)
             let writer = MockClipboardWriter()
             let viewModel = HistoryViewModel(
                 repository: repo,
                 entryManager: entryManager,
-                clipboardMonitor: monitor,
                 clipboardWriter: writer,
                 settings: settings
             )
@@ -823,6 +1014,116 @@ struct TestMain {
         await t.run("Polling is slowest in private mode") {
             let schedule = ClipboardMonitor.makePollSchedule(isPrivateMode: true, isLowPowerModeEnabled: false)
             t.checkEqual(schedule, ClipboardMonitor.PollSchedule(interval: 1.2, tolerance: 0.4))
+        }
+
+        await t.run("Monitor records a copy made by another app") {
+            let fixture = try MonitorFixture()
+            defer { fixture.tearDown() }
+
+            fixture.copyFromOtherApp("Copied elsewhere")
+            await fixture.monitor.checkForChanges()?.value
+
+            t.checkEqual(try await fixture.recordedTexts(), ["Copied elsewhere"])
+        }
+
+        await t.run("Monitor skips concealed and transient pasteboard contents") {
+            let fixture = try MonitorFixture()
+            defer { fixture.tearDown() }
+
+            let markers = [
+                "org.nspasteboard.ConcealedType",
+                "org.nspasteboard.TransientType",
+                "org.nspasteboard.AutoGeneratedType",
+                "com.agilebits.onepassword",
+                "de.petermaurer.TransientPasteboardType",
+            ]
+            for marker in markers {
+                fixture.copyFromOtherApp("secret for \(marker)", markers: [NSPasteboard.PasteboardType(marker)])
+                t.check(fixture.monitor.checkForChanges() == nil, "Contents marked \(marker) should not be recorded")
+            }
+
+            fixture.copyFromOtherApp("Not a secret")
+            await fixture.monitor.checkForChanges()?.value
+            t.checkEqual(try await fixture.recordedTexts(), ["Not a secret"])
+        }
+
+        await t.run("Writer tags every write with org.nspasteboard.source") {
+            let fixture = try MonitorFixture()
+            defer { fixture.tearDown() }
+
+            let png = makePNGData()
+            fixture.imageCache.save(data: png, forHash: "png-hash")
+            let rtf = "{\\rtf1\\ansi Rich}".data(using: .utf8)!
+            let fileEntry = ClipboardEntry(
+                id: nil, type: .fileURL, textContent: "/tmp/one.txt\n/tmp/two.txt", rtfData: nil, imageHash: nil,
+                contentHash: nil, sourceAppBundleId: nil, sourceAppName: nil, isFavorite: false, isPinned: false,
+                createdAt: Date(), lastUsedAt: Date(), useCount: 1, contentSizeBytes: 0
+            )
+
+            let writes: [(String, () async throws -> Void)] = [
+                ("text", { try await fixture.writer.write(.text("Plain")) }),
+                ("rtf", { try await fixture.writer.write(.rtf("Rich", data: rtf)) }),
+                ("image", { try await fixture.writer.write(.image(hash: "png-hash", sizeBytes: png.count)) }),
+                ("file URLs", { try await fixture.writer.write(fileEntry) }),
+                ("plain text", { try await fixture.writer.writePlainText(.rtf("Rich", data: rtf)) }),
+                ("raw text", { try fixture.writer.writeText("Improved") }),
+            ]
+            for (name, write) in writes {
+                try await write()
+                t.checkEqual(fixture.pasteboard.string(forType: .nspasteboardSource), PasteboardClipboardWriter.sourceIdentifier, "\(name) write should carry the source tag")
+            }
+
+            // The tag must not displace the payload of multi-item writes.
+            try await fixture.writer.write(fileEntry)
+            let urls = fixture.pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]
+            t.checkEqual(urls?.map(\.path), ["/tmp/one.txt", "/tmp/two.txt"])
+        }
+
+        await t.run("Own writes within one poll interval do not swallow the next real copy") {
+            let fixture = try MonitorFixture()
+            defer { fixture.tearDown() }
+
+            fixture.copyFromOtherApp("First copy")
+            await fixture.monitor.checkForChanges()?.value
+
+            // e.g. ⌘⇧← pressed twice faster than the poll interval
+            try await fixture.writer.write(.text("Restored one"))
+            try await fixture.writer.write(.text("Restored two"))
+            t.check(fixture.monitor.checkForChanges() == nil, "ClipStash's own writes should not be recorded")
+
+            fixture.copyFromOtherApp("Real copy")
+            await fixture.monitor.checkForChanges()?.value
+
+            t.checkEqual(try await fixture.recordedTexts(), ["First copy", "Real copy"])
+        }
+
+        await t.run("Monitor records contents tagged with another app's source") {
+            let fixture = try MonitorFixture()
+            defer { fixture.tearDown() }
+
+            fixture.copyFromOtherApp("From another app")
+            fixture.pasteboard.setString("com.example.other", forType: .nspasteboardSource)
+            await fixture.monitor.checkForChanges()?.value
+
+            t.checkEqual(try await fixture.recordedTexts(), ["From another app"])
+        }
+
+        await t.run("Changes made inside ignoringChanges are not recorded") {
+            let fixture = try MonitorFixture()
+            defer { fixture.tearDown() }
+
+            let copied: String? = await fixture.monitor.ignoringChanges {
+                // e.g. the copy a simulated ⌘C makes the frontmost app perform
+                fixture.copyFromOtherApp("Selected text")
+                t.check(fixture.monitor.checkForChanges() == nil, "A poll inside the scope should not record")
+                return fixture.pasteboard.string(forType: .string)
+            }
+            t.checkEqual(copied, "Selected text")
+            t.check(fixture.monitor.checkForChanges() == nil, "The change made inside the scope should stay skipped")
+
+            fixture.copyFromOtherApp("Later copy")
+            await fixture.monitor.checkForChanges()?.value
+            t.checkEqual(try await fixture.recordedTexts(), ["Later copy"])
         }
 
         await t.run("Panel width follows configured percentage") {

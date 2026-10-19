@@ -37,7 +37,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         database = databaseBootstrap.database
         repository = SQLiteEntryRepository(database: database)
-        imageCache = ImageFileCache(passphraseProvider: databaseBootstrap.passphraseProvider)
+        imageCache = ImageFileCache(
+            directoryURL: databaseBootstrap.imageCacheDirectoryURL,
+            passphraseProvider: databaseBootstrap.passphraseProvider
+        )
         entryManager = EntryManager(repository: repository, settings: settings, imageCache: imageCache)
         clipboardMonitor = ClipboardMonitor(entryManager: entryManager, settings: settings)
         clipboardWriter = PasteboardClipboardWriter(imageCache: imageCache)
@@ -45,7 +48,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         historyViewModel = HistoryViewModel(
             repository: repository,
             entryManager: entryManager,
-            clipboardMonitor: clipboardMonitor,
             clipboardWriter: clipboardWriter,
             settings: settings
         )
@@ -101,7 +103,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         clipboardMonitor.start()
         registerGlobalShortcuts()
-        Task { await entryManager.reconcileStoredAssets() }
+        // A fallback session starts with an empty database: reconciling against it would treat
+        // every cached image as an orphan.
+        if !databaseSecurityStatus.isFallback {
+            Task { await entryManager.reconcileStoredAssets() }
+        }
         presentStartupAlertIfNeeded()
 
         // Prompt for Accessibility permission if paste-on-selection is enabled
@@ -187,31 +193,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func performMagicReplace() async {
-        let initialChangeCount = NSPasteboard.general.changeCount
+        // 1. Simulate Cmd+C to copy the selected text, without recording the copy in history
+        let copiedText: String? = await clipboardMonitor.ignoringChanges {
+            let initialChangeCount = NSPasteboard.general.changeCount
+            await KeystrokeSimulator.simulateCopy()
 
-        // 1. Tell ClipboardMonitor to ignore the next change
-        clipboardMonitor.beginDebounce()
+            // Wait for clipboard to update (up to 500ms)
+            var waited = 0
+            while NSPasteboard.general.changeCount == initialChangeCount && waited < 500 {
+                try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+                waited += 50
+            }
 
-        // 2. Simulate Cmd+C to copy selected text
-        await KeystrokeSimulator.simulateCopy()
-
-        // Wait for clipboard to update (up to 500ms)
-        var waited = 0
-        while NSPasteboard.general.changeCount == initialChangeCount && waited < 500 {
-            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
-            waited += 50
+            // Nothing was copied (e.g. no text selected or modifiers blocked the copy)
+            guard NSPasteboard.general.changeCount != initialChangeCount else { return nil }
+            return NSPasteboard.general.string(forType: .string)
         }
-
-        // If nothing was copied (e.g. no text selected or modifiers blocked the copy), cancel the debounce
-        if NSPasteboard.general.changeCount == initialChangeCount {
-            clipboardMonitor.cancelDebounce()
-            return
-        }
-
-        guard let text = NSPasteboard.general.string(forType: .string) else {
-            clipboardMonitor.cancelDebounce()
-            return
-        }
+        guard let text = copiedText else { return }
 
         do {
             let improvedText = try await OllamaService.improveText(
@@ -225,17 +223,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Save to entryManager so it's in history
             await self.entryManager.processNewText(improvedText, source: "Ollama", sourceName: "✨ AI Assistant")
 
-            // 3. Tell ClipboardMonitor to ignore the upcoming change we are about to make
-            clipboardMonitor.beginDebounce()
-
-            // Write to pasteboard
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(improvedText, forType: .string)
+            // 2. Write to pasteboard (tagged as ClipStash's own write, so the monitor skips it)
+            try clipboardWriter.writeText(improvedText)
 
             // Wait for pasteboard to update
             try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
 
-            // Simulate Cmd+V to paste
+            // 3. Simulate Cmd+V to paste
             await KeystrokeSimulator.simulatePaste()
         } catch {
             Logger(subsystem: "ClipStash", category: "MagicReplace").error("Magic Replace failed: \(error.localizedDescription, privacy: .public)")

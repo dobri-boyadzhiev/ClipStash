@@ -22,7 +22,6 @@ final class HistoryViewModel: ObservableObject {
     private let logger = Logger(subsystem: "ClipStash", category: "HistoryViewModel")
     private let repository: EntryRepository
     private let entryManager: EntryManager
-    private let clipboardMonitor: ClipboardMonitor
     private let clipboardWriter: ClipboardWriting
     let settings: AppSettings
     
@@ -32,10 +31,9 @@ final class HistoryViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     
     init(repository: EntryRepository, entryManager: EntryManager,
-         clipboardMonitor: ClipboardMonitor, clipboardWriter: ClipboardWriting, settings: AppSettings) {
+         clipboardWriter: ClipboardWriting, settings: AppSettings) {
         self.repository = repository
         self.entryManager = entryManager
-        self.clipboardMonitor = clipboardMonitor
         self.clipboardWriter = clipboardWriter
         self.settings = settings
         
@@ -53,13 +51,10 @@ final class HistoryViewModel: ObservableObject {
     
     func loadInitial() async {
         await loadRecentSourceApps()
+        await load(criteria: SearchQueryParser.parse(searchQuery))
+    }
 
-        let trimmedQuery = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedQuery.isEmpty {
-            await performSearch(trimmedQuery)
-            return
-        }
-
+    private func loadHistory() async {
         isLoading = true
         currentOffset = 0
 
@@ -115,10 +110,20 @@ final class HistoryViewModel: ObservableObject {
     
     private func performSearch(_ query: String) async {
         let criteria = SearchQueryParser.parse(query)
+        if criteria.isEmpty {
+            // Back to the plain history, so refresh its recent-app chips too.
+            await loadRecentSourceApps()
+        }
+        await load(criteria: criteria)
+    }
+
+    /// Shows the plain history for empty criteria, search results otherwise. Queries such as
+    /// `"`, `-` or `-fav` are not empty text but parse to empty criteria, so they get the history.
+    private func load(criteria: SearchCriteria) async {
         activeSearchCriteria = criteria
 
         guard !criteria.isEmpty else {
-            await loadInitial()
+            await loadHistory()
             return
         }
         
@@ -184,9 +189,7 @@ final class HistoryViewModel: ObservableObject {
                 sourceName: "✨ AI Assistant"
             )
 
-            clipboardMonitor.beginDebounce()
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(improvedText, forType: .string)
+            try await clipboardWriter.writeText(improvedText)
 
             await loadInitial()
         } catch {
@@ -198,13 +201,11 @@ final class HistoryViewModel: ObservableObject {
 
     func select(_ entry: ClipboardEntry) async -> Bool {
         do {
-            clipboardMonitor.beginDebounce()
             try await clipboardWriter.write(entry)
             let _ = try await entryManager.select(entry)
             errorMessage = nil
             return true
         } catch {
-            clipboardMonitor.cancelDebounce()
             reportError(error, fallbackMessage: "Failed to restore the selected clipboard item.")
             return false
         }
@@ -212,13 +213,11 @@ final class HistoryViewModel: ObservableObject {
 
     func copyAsPlainText(_ entry: ClipboardEntry) async -> Bool {
         do {
-            clipboardMonitor.beginDebounce()
             try await clipboardWriter.writePlainText(entry)
             let _ = try await entryManager.select(entry)
             errorMessage = nil
             return true
         } catch {
-            clipboardMonitor.cancelDebounce()
             reportError(error, fallbackMessage: "Failed to copy the selected item as plain text.")
             return false
         }

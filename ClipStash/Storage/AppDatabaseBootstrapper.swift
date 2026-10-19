@@ -4,6 +4,8 @@ import OSLog
 struct AppDatabaseBootstrap: Sendable {
     let database: AppDatabase
     let passphraseProvider: any DatabasePassphraseProviding
+    /// Image cache directory paired with `database`; a fallback database gets its own temporary one.
+    let imageCacheDirectoryURL: URL
     let securityStatus: DatabaseSecurityStatus
     let startupAlertMessage: String?
 }
@@ -13,16 +15,27 @@ struct AppDatabaseBootstrapper {
 
     let databasePath: String
     let passphraseProvider: KeychainDatabasePassphraseProvider
+    let imageCacheDirectoryURL: URL
     let fallbackDatabasePath: String
 
     init(
         databasePath: String = AppDatabase.defaultPath,
         passphraseProvider: KeychainDatabasePassphraseProvider,
+        imageCacheDirectoryURL: URL = ImageFileCache.defaultDirectoryURL,
         fallbackDatabasePath: String = AppDatabaseBootstrapper.makeFallbackDatabasePath()
     ) {
         self.databasePath = databasePath
         self.passphraseProvider = passphraseProvider
+        self.imageCacheDirectoryURL = imageCacheDirectoryURL
         self.fallbackDatabasePath = fallbackDatabasePath
+    }
+
+    /// The fallback database never references the persistent images, so it must not share their
+    /// directory: reconciling the image cache against it would delete every stored image.
+    static func fallbackImageCacheDirectoryURL(forDatabasePath databasePath: String) -> URL {
+        let databaseURL = URL(fileURLWithPath: databasePath)
+        let directoryName = databaseURL.deletingPathExtension().lastPathComponent + "_images"
+        return databaseURL.deletingLastPathComponent().appendingPathComponent(directoryName, isDirectory: true)
     }
 
     func bootstrap() -> AppDatabaseBootstrap {
@@ -40,6 +53,7 @@ struct AppDatabaseBootstrapper {
         return AppDatabaseBootstrap(
             database: database,
             passphraseProvider: passphraseProvider,
+            imageCacheDirectoryURL: imageCacheDirectoryURL,
             securityStatus: .keychainBacked(
                 databasePath: databasePath,
                 keyStorageDescription: passphraseProvider.keyStorageDescription
@@ -60,6 +74,7 @@ struct AppDatabaseBootstrapper {
             return AppDatabaseBootstrap(
                 database: fallbackDatabase,
                 passphraseProvider: fallbackProvider,
+                imageCacheDirectoryURL: Self.fallbackImageCacheDirectoryURL(forDatabasePath: fallbackDatabasePath),
                 securityStatus: fallbackStatus,
                 startupAlertMessage: fallbackStatus.startupAlertMessage
             )
