@@ -59,10 +59,12 @@ else
     VERSION=$(bump_version "${LATEST}" "${BUMP_MODE}")
 fi
 
-BUILD_DIR="${SCRATCH_PATH}/arm64-apple-macosx/${CONFIG}"
-
 echo "🔨 Building ${APP_NAME} v${VERSION} (${CONFIG})..."
 swift build -c "${CONFIG}" --scratch-path "${SCRATCH_PATH}" --product ClipStashApp 2>&1
+
+# The output layout depends on SwiftPM's build system (native: arm64-apple-macosx/<config>,
+# swiftbuild: out/Products/<Config>), so ask SwiftPM where it put the products.
+BUILD_DIR="$(swift build -c "${CONFIG}" --scratch-path "${SCRATCH_PATH}" --show-bin-path)"
 
 BIN_PATH="${BUILD_DIR}/ClipStashApp"
 
