@@ -13,9 +13,11 @@ final class ImageFileCache: ImageCacheProtocol, Sendable {
     private let logger = Logger(subsystem: "ClipStash", category: "ImageFileCache")
     private let passphraseProvider: any DatabasePassphraseProviding
 
-    init(passphraseProvider: any DatabasePassphraseProviding) {
+    /// `directoryURL` must belong to the database the cache is paired with: `cleanOrphans`
+    /// deletes every file whose hash that database does not reference.
+    init(directoryURL: URL, passphraseProvider: any DatabasePassphraseProviding) {
         self.passphraseProvider = passphraseProvider
-        cacheDir = Self.defaultDirectoryURL
+        cacheDir = directoryURL
         do {
             try FileManager.default.createDirectory(
                 at: cacheDir,
